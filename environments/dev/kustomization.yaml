@@ -1,3 +1,4 @@
 # environments/dev/kustomization.yaml
 resources:
   - ../../infrastructure/metallb
+  - ../../apps/jellyfin
