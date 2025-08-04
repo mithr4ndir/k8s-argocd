@@ -3,7 +3,3 @@ kind: L2Advertisement
 metadata:
   name: l2
   namespace: metallb-system
-  ipAddressPools:
-    - local-pool
-  interfaces: 
-    - name: eth0
