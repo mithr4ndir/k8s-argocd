@@ -1,2 +1,3 @@
+# environments/dev/kustomization.yaml
 resources:
-  - infrastructure/metallb 
+  - ../../infrastructure/metallb
