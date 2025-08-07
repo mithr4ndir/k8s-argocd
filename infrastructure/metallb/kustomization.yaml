@@ -1,9 +1,10 @@
 resources:
-  - namespace.yaml
-  - svc-controller.yaml
-  - svc-speaker.yaml
+  - metallb-namespace.yaml
+  - crds.yaml
+  - service-accounts.yaml
+  - rbac.yaml
+  - webhooks.yaml
   - controller.yaml
   - speaker.yaml
-  - rbac.yaml
-  - l2advertisement.yaml
   - ipaddresspool.yaml
+  - l2advertisement.yaml
