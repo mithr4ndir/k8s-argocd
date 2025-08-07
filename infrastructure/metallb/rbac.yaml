@@ -1,25 +1,227 @@
+---
+# Source: metallb/templates/rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: metallb-system:controller
+  name: release-name-metallb-system:controller
+  labels:
+    helm.sh/chart: metallb-0.15.2
+    app.kubernetes.io/name: metallb-system
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "v0.15.2"
+    app.kubernetes.io/managed-by: Helm
 rules:
-  - apiGroups: [""]
-    resources: ["configmaps", "secrets", "services", "endpoints", "nodes", "pods"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["metallb.io"]
-    resources: ["ipaddresspools", "l2advertisements"]
-    verbs: ["get", "list", "watch"]
-
+- apiGroups: [""]
+  resources: ["services", "namespaces"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["list"]
+- apiGroups: [""]
+  resources: ["services/status"]
+  verbs: ["update"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["validatingwebhookconfigurations"]
+  resourceNames: ["metallb-webhook-configuration"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["validatingwebhookconfigurations"]
+  verbs: ["list", "watch"]
+- apiGroups: ["apiextensions.k8s.io"]
+  resources: ["customresourcedefinitions"]
+  resourceNames: ["bfdprofiles.metallb.io","bgpadvertisements.metallb.io",
+    "bgppeers.metallb.io","ipaddresspools.metallb.io","l2advertisements.metallb.io","communities.metallb.io"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["apiextensions.k8s.io"]
+  resources: ["customresourcedefinitions"]
+  verbs: ["list", "watch"]
 ---
+# Source: metallb/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: release-name-metallb-system:speaker
+  labels:
+    helm.sh/chart: metallb-0.15.2
+    app.kubernetes.io/name: metallb-system
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "v0.15.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups: [""]
+  resources: ["services", "endpoints", "nodes", "namespaces"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+- apiGroups: ["metallb.io"]
+  resources: ["servicel2statuses","servicel2statuses/status"]
+  verbs: ["*"]
+---
+# Source: metallb/templates/rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: metallb-system:controller
+  name: release-name-metallb-system:controller
+  labels:
+    helm.sh/chart: metallb-0.15.2
+    app.kubernetes.io/name: metallb-system
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "v0.15.2"
+    app.kubernetes.io/managed-by: Helm
+subjects:
+- kind: ServiceAccount
+  name: release-name-metallb-system-controller
+  namespace: metallb-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: metallb-system:controller
+  name: release-name-metallb-system:controller
+---
+# Source: metallb/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: release-name-metallb-system:speaker
+  labels:
+    helm.sh/chart: metallb-0.15.2
+    app.kubernetes.io/name: metallb-system
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "v0.15.2"
+    app.kubernetes.io/managed-by: Helm
 subjects:
-  - kind: ServiceAccount
-    name: controller
-    namespace: metallb-system
+- kind: ServiceAccount
+  name: release-name-metallb-system-speaker
+  namespace: metallb-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: release-name-metallb-system:speaker
+---
+# Source: metallb/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: release-name-metallb-system-pod-lister
+  namespace: "metallb-system"
+  labels:
+    helm.sh/chart: metallb-0.15.2
+    app.kubernetes.io/name: metallb-system
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "v0.15.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["list", "get"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metallb.io"]
+  resources: ["bfdprofiles"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metallb.io"]
+  resources: ["bgppeers"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metallb.io"]
+  resources: ["l2advertisements"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metallb.io"]
+  resources: ["bgpadvertisements"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metallb.io"]
+  resources: ["ipaddresspools"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metallb.io"]
+  resources: ["communities"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metallb.io"]
+  resources: ["servicebgpstatuses","servicebgpstatuses/status"]
+  verbs: ["*"]
+---
+# Source: metallb/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: release-name-metallb-system-controller
+  namespace: "metallb-system"
+  labels:
+    helm.sh/chart: metallb-0.15.2
+    app.kubernetes.io/name: metallb-system
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "v0.15.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["metallb.io"]
+  resources: ["ipaddresspools"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metallb.io"]
+  resources: ["ipaddresspools/status"]
+  verbs: ["update"]
+- apiGroups: ["metallb.io"]
+  resources: ["bgppeers"]
+  verbs: ["get", "list"]
+- apiGroups: ["metallb.io"]
+  resources: ["bgpadvertisements"]
+  verbs: ["get", "list"]
+- apiGroups: ["metallb.io"]
+  resources: ["l2advertisements"]
+  verbs: ["get", "list"]
+- apiGroups: ["metallb.io"]
+  resources: ["communities"]
+  verbs: ["get", "list","watch"]
+- apiGroups: ["metallb.io"]
+  resources: ["bfdprofiles"]
+  verbs: ["get", "list","watch"]
+---
+# Source: metallb/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: release-name-metallb-system-pod-lister
+  namespace: "metallb-system"
+  labels:
+    helm.sh/chart: metallb-0.15.2
+    app.kubernetes.io/name: metallb-system
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "v0.15.2"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: release-name-metallb-system-pod-lister
+subjects:
+- kind: ServiceAccount
+  name: release-name-metallb-system-speaker
+---
+# Source: metallb/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: release-name-metallb-system-controller
+  namespace: "metallb-system"
+  labels:
+    helm.sh/chart: metallb-0.15.2
+    app.kubernetes.io/name: metallb-system
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "v0.15.2"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: release-name-metallb-system-controller
+subjects:
+- kind: ServiceAccount
+  name: release-name-metallb-system-controller
