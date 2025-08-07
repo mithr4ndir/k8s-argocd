@@ -7,3 +7,5 @@ metadata:
 spec:
   ipAddressPools:
     - local-pool
+  interfaces:
+    - eth0
