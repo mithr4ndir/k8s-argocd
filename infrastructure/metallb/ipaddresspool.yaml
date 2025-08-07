@@ -6,6 +6,3 @@ metadata:
 spec:
   addresses:
     - 192.168.1.225-192.168.1.235
-  interfaces:
-    - eth0
-
