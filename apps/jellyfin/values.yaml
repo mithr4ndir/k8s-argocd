@@ -189,14 +189,14 @@ persistence:
     # -- Path on the host node for media storage, only used if type is 'hostPath'.
     hostPath: ""
     # -- PVC specific settings, only used if type is 'pvc'.
-    # accessMode: ReadWriteOnce
-    # size: 25Gi
+    accessMode: ReadWriteMany
+    size: 500Gi
     # -- Custom annotations to be added to the PVC
     annotations: {}
     # -- If undefined (the default) or set to null, no storageClassName spec is set, choosing the default provisioner.
-    # storageClass: ''
+    storageClass: ''
     ## -- Use an existing PVC for this mount
-    existingClaim: 'nfs-media'
+    # existingClaim: 'nfs-media'
     mountPath: /media
 
 # -- Configuration for metrics collection and monitoring
