@@ -14,7 +14,7 @@ KUSTOMIZATION   ?= kustomization.yaml
 # -------- Targets --------
 .PHONY: all render generate-crs update-kustomize clean
 
-all: render generate-crs update-kustomize
+all: render generate-crs update-kustomize inject-namespace
 
 ## Check for required tools
 ensure-deps:
@@ -82,6 +82,15 @@ update-kustomize:
 
 	@echo "✅ Finished: $(KUSTOMIZATION) is now kind-ordered and deduplicated"
 
+inject-namespace:
+	@echo "📛 Injecting namespace into $(KUSTOMIZATION)..."
+	@NAMESPACE=$$(yq e '.metadata.name' *namespace.yaml 2>/dev/null | grep -v null | head -n1); \
+	if [ -n "$$NAMESPACE" ]; then \
+		sed -i "1s|^|namespace: $$NAMESPACE\n|" $(KUSTOMIZATION); \
+		echo "✅ Namespace '$$NAMESPACE' injected into $(KUSTOMIZATION)."; \
+	else \
+		echo "⚠️  No namespace detected in *namespace.yaml. Skipping injection."; \
+	fi
 
 ## Clean rendered files
 clean:
