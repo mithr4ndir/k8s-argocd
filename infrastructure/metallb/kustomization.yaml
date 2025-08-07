@@ -3,5 +3,5 @@ resources:
   - controller.yaml
   - speaker.yaml
   - rbac.yaml
-  - ipaddresspool.yaml
   - l2advertisement.yaml
+  - ipaddresspool.yaml
