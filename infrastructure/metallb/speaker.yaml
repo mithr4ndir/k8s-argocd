@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: speaker
+  namespace: metallb-system
+spec:
+  selector:
+    matchLabels:
+      component: speaker
+  template:
+    metadata:
+      labels:
+        component: speaker
+    spec:
+      serviceAccountName: speaker
+      containers:
+        - name: speaker
+          image: quay.io/metallb/speaker:v0.15.2
+          imagePullPolicy: IfNotPresent
+
