@@ -1,0 +1,24 @@
+---
+# Source: jellyfin/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jellyfin
+  labels:
+    helm.sh/chart: jellyfin-2.3.0
+    app.kubernetes.io/name: jellyfin
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "10.10.6"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  rules:
+    - host: "jelly.herro.me"
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: jellyfin
+                port:
+                  number: 8096

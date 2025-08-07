@@ -1,16 +1,22 @@
+---
+# Source: jellyfin/templates/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
   name: jellyfin
-  namespace: jellyfin
   labels:
-    app: jellyfin
+    helm.sh/chart: jellyfin-2.3.0
     app.kubernetes.io/name: jellyfin
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "10.10.6"
+    app.kubernetes.io/managed-by: Helm
 spec:
   type: LoadBalancer
-  selector:
-    app: jellyfin
   ports:
     - name: http
-      port: 80
-      targetPort: 8096   # Jellyfin default port
+      port: 8096
+      protocol: TCP
+      targetPort: http
+  selector:
+    app.kubernetes.io/name: jellyfin
+    app.kubernetes.io/instance: release-name
