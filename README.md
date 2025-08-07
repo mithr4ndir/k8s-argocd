@@ -144,6 +144,90 @@ argocd app get jellyfin-dev
 
 ---
 
+## 🧠 Lessons Learned: MetalLB on Control-Plane Nodes
+
+During the deployment of MetalLB in a cluster where control-plane nodes are also used for workloads, a few important behaviors and gotchas surfaced that are worth documenting for future clusters.
+
+---
+
+### 🏷️ Problem: IPs were being bound to `kube-ipvs0`
+
+MetalLB assigned external IPs, but they were being bound to the `kube-ipvs0` interface instead of a physical NIC like `eth0`. Despite that, the external IPs now **work correctly** after resolving underlying node eligibility issues.
+
+#### 🔍 Root Causes
+- MetalLB uses a default interface discovery logic unless `interfaces:` is set or exclusions are configured.
+- All control-plane nodes were labeled with:
+  ```
+  node.kubernetes.io/exclude-from-external-load-balancers
+  ```
+  which caused MetalLB to **ignore those nodes entirely** for external IP announcement — regardless of the interface.
+
+---
+
+### ✅ Fixes Applied
+
+#### 1. Removed the exclusion label
+
+```bash
+kubectl label node <node-name> node.kubernetes.io/exclude-from-external-load-balancers-
+```
+
+This allowed MetalLB to reassess control-plane nodes as valid candidates for announcing external IPs.
+
+#### 2. Restarted MetalLB speakers
+
+```bash
+kubectl rollout restart daemonset <speaker-name> -n metallb-system
+```
+
+After restarting, the speakers re-announced the IPs — and **despite still binding them to `kube-ipvs0`**, the IPs now respond correctly to ARP and traffic from external clients.
+
+---
+
+### 🧪 How to Detect the Problem
+
+- IP is assigned, but ping/curl from outside fails
+- `ip addr show` shows the IP is bound to `kube-ipvs0`
+- Node labels show: `exclude-from-external-load-balancers`
+
+``` bash
+# How to see if the label exists on the node
+ladino@k8cluster1:~$ kubectl get nodes --show-labels | grep exclude-from-external
+# Output that confirms the label exists
+k8cluster1   Ready    control-plane   13d   v1.33.3   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/os=linux,kubernetes.io/arch=amd64,kubernetes.io/hostname=k8cluster1,kubernetes.io/os=linux,node-role.kubernetes.io/control-plane=,node.kubernetes.io/exclude-from-external-load-balancers=
+k8cluster2   Ready    control-plane   13d   v1.33.3   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/os=linux,kubernetes.io/arch=amd64,kubernetes.io/hostname=k8cluster2,kubernetes.io/os=linux,node-role.kubernetes.io/control-plane=,node.kubernetes.io/exclude-from-external-load-balancers=
+k8cluster3   Ready    control-plane   13d   v1.33.3   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/os=linux,kubernetes.io/arch=amd64,kubernetes.io/hostname=k8cluster3,kubernetes.io/os=linux,node-role.kubernetes.io/control-plane=,node.kubernetes.io/exclude-from-external-load-balancers=
+```
+---
+
+### 💡 Key Insight
+
+Even if MetalLB binds the IP to `kube-ipvs0`, **it will work**, as long as:
+
+- The node is eligible (label removed)
+- Speaker pod is restarted (to reassess node state)
+- No `interfaces:` constraint is set in `IPAddressPool`
+- You're on a single-NIC or flat Layer 2 network
+
+So while it may look incorrect at first glance, it's **functionally sound** under the right conditions.
+
+---
+
+### ✅ Recommendation for GitOps Clusters
+
+For clusters that schedule workloads on control-plane nodes:
+
+- It is safe to remove `exclude-from-external-load-balancers`
+```bash
+# How to remove
+kubectl label node <nodename> node.kubernetes.io/exclude-from-external-load-balancers-
+```
+- No need to set `interfaces:` unless you must override defaults
+- Use `excludeInterfaces.enabled: true` in `values.yaml` for safer defaults
+- Document this behavior in your platform README
+
+---
+
 ## 🚧 Roadmap
 
 - [ ] Add TLS support via cert-manager
