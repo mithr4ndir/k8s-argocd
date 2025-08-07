@@ -1,3 +1,4 @@
+namespace: jellyfin
 resources:
   - jellyfin-namespace.yaml
   - serviceaccount.yaml
