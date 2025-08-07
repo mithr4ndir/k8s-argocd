@@ -1,20 +1,90 @@
+---
+# Source: metallb/templates/speaker.yaml
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: speaker
-  namespace: metallb-system
+  name: release-name-metallb-system-speaker
+  namespace: "metallb-system"
+  labels:
+    helm.sh/chart: metallb-0.15.2
+    app.kubernetes.io/name: metallb-system
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "v0.15.2"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: speaker
 spec:
+  updateStrategy:
+    type: RollingUpdate
   selector:
     matchLabels:
-      component: speaker
+      app.kubernetes.io/name: metallb-system
+      app.kubernetes.io/instance: release-name
+      app.kubernetes.io/component: speaker
   template:
     metadata:
       labels:
-        component: speaker
+        app.kubernetes.io/name: metallb-system
+        app.kubernetes.io/instance: release-name
+        app.kubernetes.io/component: speaker
     spec:
-      serviceAccountName: speaker
+      serviceAccountName: release-name-metallb-system-speaker
+      terminationGracePeriodSeconds: 0
+      hostNetwork: true
+      volumes:
       containers:
-        - name: speaker
-          image: quay.io/metallb/speaker:v0.15.2
-          imagePullPolicy: IfNotPresent
-
+      - name: speaker
+        image: quay.io/metallb/speaker:v0.15.2
+        args:
+        - --port=7472
+        - --log-level=info
+        env:
+        - name: METALLB_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: METALLB_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: METALLB_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        ports:
+        - name: monitoring
+          containerPort: 7472
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: monitoring
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 1
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: monitoring
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 1
+          successThreshold: 1
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+            add:
+            - NET_RAW
+      nodeSelector:
+        "kubernetes.io/os": linux
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+        operator: Exists
+      - key: node-role.kubernetes.io/control-plane
+        effect: NoSchedule
+        operator: Exists
