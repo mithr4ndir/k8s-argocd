@@ -272,7 +272,7 @@ speaker:
     mlBindAddrOverride: ""
     mlSecretKeyPath: "/etc/ml_secret_key"
   excludeInterfaces:
-    enabled: false
+    enabled: true
   # ignore the exclude-from-external-loadbalancer label
   ignoreExcludeLB: false
 
