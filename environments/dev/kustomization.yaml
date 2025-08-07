@@ -1,3 +1,4 @@
 resources:
+  - ../../base/media
   - ../../infrastructure/metallb
   - ../../apps/jellyfin

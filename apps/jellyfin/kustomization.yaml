@@ -1,6 +1,7 @@
 resources:
-  - namespace.yaml
+  - jellyfin-namespace.yaml
+  - serviceaccount.yaml
   - deployment.yaml
   - service.yaml
-  - pv.yaml
-  - pvc.yaml
+  - ingress.yaml
+  - persistentVolumeClaim.yaml
