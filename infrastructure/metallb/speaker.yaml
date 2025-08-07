@@ -31,6 +31,10 @@ spec:
       terminationGracePeriodSeconds: 0
       hostNetwork: true
       volumes:
+        - name: metallb-excludel2
+          configMap:
+            defaultMode: 256
+            name: metallb-excludel2
       containers:
       - name: speaker
         image: quay.io/metallb/speaker:v0.15.2
@@ -79,6 +83,9 @@ spec:
             - ALL
             add:
             - NET_RAW
+        volumeMounts:
+          - name: metallb-excludel2
+            mountPath: /etc/metallb
       nodeSelector:
         "kubernetes.io/os": linux
       tolerations:

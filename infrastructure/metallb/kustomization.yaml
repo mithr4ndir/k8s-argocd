@@ -3,6 +3,7 @@ resources:
   - crds.yaml
   - service-accounts.yaml
   - rbac.yaml
+  - exclude-l2-config.yaml
   - webhooks.yaml
   - controller.yaml
   - speaker.yaml
