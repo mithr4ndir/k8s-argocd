@@ -61,4 +61,4 @@ spec:
             claimName: jellyfin-config
         - name: media
           persistentVolumeClaim:
-            claimName: nfs-media
+            claimName: jellyfin-media
