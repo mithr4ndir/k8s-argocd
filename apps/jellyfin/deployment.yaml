@@ -1,27 +1,64 @@
+---
+# Source: jellyfin/templates/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: jellyfin
-  namespace: jellyfin
+  labels:
+    helm.sh/chart: jellyfin-2.3.0
+    app.kubernetes.io/name: jellyfin
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "10.10.6"
+    app.kubernetes.io/managed-by: Helm
 spec:
+  strategy:
+    type: RollingUpdate
   replicas: 2
   selector:
     matchLabels:
-      app: jellyfin
+      app.kubernetes.io/name: jellyfin
+      app.kubernetes.io/instance: release-name
   template:
     metadata:
       labels:
-        app: jellyfin
+        helm.sh/chart: jellyfin-2.3.0
+        app.kubernetes.io/name: jellyfin
+        app.kubernetes.io/instance: release-name
+        app.kubernetes.io/version: "10.10.6"
+        app.kubernetes.io/managed-by: Helm
     spec:
+      serviceAccountName: jellyfin
+      securityContext:
+        {}
       containers:
         - name: jellyfin
-          image: jellyfin/jellyfin:latest
+          securityContext:
+            {}
+          image: "docker.io/jellyfin/jellyfin:10.10.6"
+          imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 8096
+            - name: http
+              containerPort: 8096
+              protocol: TCP
+          livenessProbe:
+            initialDelaySeconds: 10
+            tcpSocket:
+              port: http
+          readinessProbe:
+            initialDelaySeconds: 10
+            tcpSocket:
+              port: http
+          resources:
+            {}
           volumeMounts:
-            - name: media
-              mountPath: /media
+            - mountPath: /config
+              name: config
+            - mountPath: /media
+              name: media
       volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: jellyfin-config
         - name: media
           persistentVolumeClaim:
-            claimName: jellyfin-media
+            claimName: nfs-media
