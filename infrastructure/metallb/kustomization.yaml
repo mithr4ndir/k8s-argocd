@@ -1,5 +1,7 @@
 resources:
   - namespace.yaml
+  - svc-controller.yaml
+  - svc-speaker.yaml
   - controller.yaml
   - speaker.yaml
   - rbac.yaml
