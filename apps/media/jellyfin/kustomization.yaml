@@ -1,8 +1,6 @@
-namespace: jellyfin
 resources:
-  - jellyfin-namespace.yaml
+  - persistentVolumeClaim.yaml
   - serviceaccount.yaml
   - deployment.yaml
   - service.yaml
   - ingress.yaml
-  - persistentVolumeClaim.yaml
