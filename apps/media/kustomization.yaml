@@ -1,3 +1,4 @@
+namespace: media
 resources:
   - media-namespace.yaml
   - media-pv-nfs.yaml
