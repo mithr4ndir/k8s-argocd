@@ -196,7 +196,7 @@ persistence:
     # -- If undefined (the default) or set to null, no storageClassName spec is set, choosing the default provisioner.
     storageClass: ''
     ## -- Use an existing PVC for this mount
-    # existingClaim: 'nfs-media'
+    #existingClaim: 'nfs-media'
     mountPath: /media
 
 # -- Configuration for metrics collection and monitoring
