@@ -6,15 +6,15 @@ HELM_CHART_REPO ?= https://jellyfin.github.io/jellyfin-helm
 HELM_VERSION    ?= 2.3.0
 RELEASE_NAME    ?= jellyfin
 RELEASE_OUTPUT  := .helm-tmp-$(RELEASE_NAME)
-NAMESPACE       ?= jellyfin
+NAMESPACE       ?= media
 VALUES_FILE     ?= values.yaml
-CHART_OUTPUT    ?= .                             # current directory
+CHART_OUTPUT    ?= .
 KUSTOMIZATION   ?= kustomization.yaml
 
 # -------- Targets --------
-.PHONY: all render generate-crs update-kustomize clean
+.PHONY: all render update-kustomize clean
 
-all: render generate-crs update-kustomize inject-namespace
+all: render update-kustomize
 
 ## Check for required tools
 ensure-deps:
@@ -33,7 +33,6 @@ render: ensure-deps
 		--repo $(HELM_CHART_REPO) \
 		--version $(HELM_VERSION) \
 		--namespace $(NAMESPACE) \
-		--create-namespace \
 		--include-crds \
 		--values $(VALUES_FILE) \
 		--output-dir $(RELEASE_OUTPUT)
@@ -45,25 +44,12 @@ render: ensure-deps
 
 	@echo "✅ All YAMLs flattened into ./"
 
-generate-crs:
-	@echo "🧾 Generating $(NAMESPACE) config CRs..."
-
-	@echo "---" > $(NAMESPACE)-namespace.yaml
-	@echo "apiVersion: v1" >> $(NAMESPACE)-namespace.yaml
-	@echo "kind: Namespace" >> $(NAMESPACE)-namespace.yaml
-	@echo "metadata:" >> $(NAMESPACE)-namespace.yaml
-	@echo "  name: $(NAMESPACE)" >> $(NAMESPACE)-namespace.yaml
-	@echo "  labels:" >> $(NAMESPACE)-namespace.yaml
-	@echo "    name: $(NAMESPACE)" >> $(NAMESPACE)-namespace.yaml
-	@echo "✅ Created $(NAMESPACE)-namespace.yaml"
-
-
 update-kustomize:
 	@echo "🔄 Rebuilding $(KUSTOMIZATION) with kind-aware ordering..."
 	@echo "resources:" > $(KUSTOMIZATION)
 
 	@EXCLUDE="kustomization.yaml values.yaml README.md Makefile"; \
-	ORDERED_KINDS="Namespace CustomResourceDefinition ServiceAccount Role RoleBinding ClusterRole ClusterRoleBinding ConfigMap Secret LimitRange ResourceQuota Deployment DaemonSet StatefulSet Job CronJob Service Ingress NetworkPolicy ValidatingWebhookConfiguration MutatingWebhookConfiguration"; \
+	ORDERED_KINDS="Namespace StorageClass PersistentVolume PersistentVolumeClaim CustomResourceDefinition ServiceAccount Role RoleBinding ClusterRole ClusterRoleBinding ConfigMap Secret LimitRange ResourceQuota Deployment DaemonSet StatefulSet Job CronJob Service Ingress NetworkPolicy ValidatingWebhookConfiguration MutatingWebhookConfiguration"; \
 	for KIND in $$ORDERED_KINDS; do \
 		for file in *.yaml; do \
 			if [ -f "$$file" ] && ! echo "$$EXCLUDE" | grep -qw "$$file"; then \
@@ -81,16 +67,6 @@ update-kustomize:
 	done
 
 	@echo "✅ Finished: $(KUSTOMIZATION) is now kind-ordered and deduplicated"
-
-inject-namespace:
-	@echo "📛 Injecting namespace into $(KUSTOMIZATION)..."
-	@NAMESPACE=$$(yq e '.metadata.name' *namespace.yaml 2>/dev/null | grep -v null | head -n1); \
-	if [ -n "$$NAMESPACE" ]; then \
-		sed -i "1s|^|namespace: $$NAMESPACE\n|" $(KUSTOMIZATION); \
-		echo "✅ Namespace '$$NAMESPACE' injected into $(KUSTOMIZATION)."; \
-	else \
-		echo "⚠️  No namespace detected in *namespace.yaml. Skipping injection."; \
-	fi
 
 ## Clean rendered files
 clean:

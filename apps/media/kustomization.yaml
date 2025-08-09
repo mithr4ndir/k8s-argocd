@@ -1,4 +1,6 @@
 resources:
   - media-namespace.yaml
   - media-pv-nfs.yaml
-  - media-pvc-nfs.yaml
+  - jellyfin/
+  #- radarr/
+  #- sonarr/
