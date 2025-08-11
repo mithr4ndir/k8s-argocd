@@ -1,0 +1,17 @@
+---
+# Source: nfs-subdir-external-provisioner/templates/poddisruptionbudget.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  labels:
+    chart: nfs-subdir-external-provisioner-4.0.18
+    heritage: Helm
+    app: nfs-subdir-external-provisioner
+    release: release-name
+  name: release-name-nfs-subdir-external-provisioner
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: nfs-subdir-external-provisioner
+      release: release-name
