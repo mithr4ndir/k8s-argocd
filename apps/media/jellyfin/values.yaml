@@ -38,11 +38,14 @@ podAnnotations: {}
 podLabels: {}
 
 # -- Security context for the pod.
-podSecurityContext: {}
-  # fsGroup: 2000
+podSecurityContext: {
+  fsGroup: 1000
+}
 
 # -- Security context for the container.
-securityContext: {}
+securityContext: 
+  runAsUser: 1000
+  runAsGroup: 1000
   # capabilities:
   #   drop:
   #   - ALL
@@ -58,7 +61,7 @@ priorityClassName: ""
 
 # -- Deployment strategy configuration. See `kubectl explain deployment.spec.strategy`.
 deploymentStrategy:
-  type: RollingUpdate
+  type: Recreate
 
 # -- Annotations to add to the deployment.
 deploymentAnnotations: {}
@@ -157,7 +160,15 @@ nodeSelector: {}
 tolerations: []
 
 # -- Affinity rules for pod scheduling.
-affinity: {}
+affinity: 
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: jellyfin
 
 jellyfin:
   # -- Enable DLNA. Requires host network. See: https://jellyfin.org/docs/general/networking/dlna.html
@@ -173,7 +184,7 @@ persistence:
   config:
     # -- set to false to use emptyDir
     enabled: true
-    accessMode: ReadWriteMany
+    accessMode: ReadWriteOnce
     size: 5Gi
     # -- Custom annotations to be added to the PVC
     annotations: {}
