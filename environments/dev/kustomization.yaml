@@ -1,3 +1,4 @@
 resources:
   - ../../infrastructure/metallb
+  - ../../infrastructure/nfs
   - ../../apps/media
