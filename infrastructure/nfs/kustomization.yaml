@@ -1,0 +1,13 @@
+namespace: nfs
+resources:
+  - nfs-namespace.yaml
+  - storageclass.yaml
+  - persistentvolume.yaml
+  - persistentvolumeclaim.yaml
+  - serviceaccount.yaml
+  - role.yaml
+  - rolebinding.yaml
+  - clusterrole.yaml
+  - clusterrolebinding.yaml
+  - deployment.yaml
+  - poddisruptionbudget.yaml
