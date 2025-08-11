@@ -9,7 +9,7 @@ imagePullSecrets: []
 
 nfs:
   server: 192.168.1.15
-  path: /mnt/tanks/k8s
+  path: /mnt/tank/k8s
   mountOptions:
     - nfsvers=4.1
     - hard
