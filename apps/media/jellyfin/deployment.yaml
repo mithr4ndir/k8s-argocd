@@ -12,7 +12,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
 spec:
   strategy:
-    type: RollingUpdate
+    type: Recreate
   replicas: 1
   selector:
     matchLabels:
@@ -29,11 +29,12 @@ spec:
     spec:
       serviceAccountName: jellyfin
       securityContext:
-        {}
+        fsGroup: 1000
       containers:
         - name: jellyfin
           securityContext:
-            {}
+            runAsGroup: 1000
+            runAsUser: 1000
           image: "docker.io/jellyfin/jellyfin:10.10.6"
           imagePullPolicy: IfNotPresent
           ports:
@@ -62,3 +63,12 @@ spec:
         - name: media
           persistentVolumeClaim:
             claimName: jellyfin-media
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: jellyfin
+              topologyKey: kubernetes.io/hostname
+            weight: 100
