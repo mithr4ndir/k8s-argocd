@@ -173,12 +173,12 @@ persistence:
   config:
     # -- set to false to use emptyDir
     enabled: true
-    accessMode: ReadWriteOnce
+    accessMode: ReadWriteMany
     size: 5Gi
     # -- Custom annotations to be added to the PVC
     annotations: {}
     # -- If undefined (the default) or set to null, no storageClassName spec is set, choosing the default provisioner.
-    storageClass: ''
+    storageClass: k8s-nfs
     ## -- Use an existing PVC for this mount
     # existingClaim: ''
   media:
