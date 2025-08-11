@@ -12,10 +12,11 @@ metadata:
     app.kubernetes.io/managed-by: Helm
 spec:
   accessModes:
-    - "ReadWriteOnce"
+    - "ReadWriteMany"
   resources:
     requests:
       storage: "5Gi"
+  storageClassName: "k8s-nfs"
 ---
 # Source: jellyfin/templates/persistentVolumeClaim.yaml
 apiVersion: v1
