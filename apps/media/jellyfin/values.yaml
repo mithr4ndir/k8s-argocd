@@ -86,11 +86,12 @@ service:
   # -- Name of the port in the service.
   portName: http
   # -- Annotations for the service.
-  annotations: {}
+  annotations: 
+    metallb.universe.tf/allow-shared-ip: media-shared
   # -- Labels for the service.
   labels: {}
   # -- External traffic policy (Cluster or Local).
-  # externalTrafficPolicy: Cluster
+  externalTrafficPolicy: Cluster
   # -- NodePort for the service (if applicable).
   # nodePort: 
 
