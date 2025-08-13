@@ -1,0 +1,44 @@
+image:
+  repository: ghcr.io/elfhosted
+  pullPolicy: IfNotPresent
+  tag: 25.2@sha256:aab5814cc7a89ca4ad04b62d8e7b98725b15697bf711c9982bbcd3fc55d1aab1
+service:
+  main:
+    ports:
+      main:
+        port: 10057
+        targetPort: 6789
+persistence:
+  config:
+    enabled: true
+    mountPath: "/config"
+    storageClass: k8s-nfs
+  media:
+    enabled: true
+    mountPath: "/media"
+    existingClaim: 'jellyfin-media'
+workload:
+  main:
+    podSpec:
+      # POD-LEVEL security context (applies to all containers/volumes in the pod)
+      securityContext:
+        runAsUser: 1000           # match your NAS/NFS uid
+        runAsGroup: 1000          # match your NAS/NFS gid
+        fsGroup: 1000             # ensures files/dirs are accessible to the group
+        fsGroupChangePolicy: "OnRootMismatch"
+      containers:
+        main:
+          # CONTAINER-LEVEL security context (hardens the container)
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false    # set true only if your app doesn’t write to root fs
+            capabilities:
+              drop:
+                - ALL
+          probes:
+            liveness:
+              enabled: false
+            readiness:
+              enabled: false
+            startup:
+              enabled: false
