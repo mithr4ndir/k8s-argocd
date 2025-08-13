@@ -10,9 +10,12 @@ metadata:
     app.kubernetes.io/instance: release-name
     app.kubernetes.io/version: "10.10.6"
     app.kubernetes.io/managed-by: Helm
+  annotations:
+    metallb.universe.tf/allow-shared-ip: media-shared
 spec:
   type: LoadBalancer
   loadBalancerIP: 192.168.1.226
+  externalTrafficPolicy: Cluster
   ports:
     - name: http
       port: 80
