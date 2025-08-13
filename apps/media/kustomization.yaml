@@ -3,5 +3,6 @@ resources:
   - media-namespace.yaml
   - media-pv-nfs.yaml
   - jellyfin/
+  - nzbget/
   #- radarr/
   #- sonarr/
