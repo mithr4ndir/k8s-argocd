@@ -81,7 +81,7 @@ spec:
       enableServiceLinks: true
       containers:
         - name: release-name-nzbget
-          image: "ghcr.io/mithr4ndir/nzbget:21.1"
+          image: "ghcr.io/mithr4ndir/nzbget:21.1.1"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
