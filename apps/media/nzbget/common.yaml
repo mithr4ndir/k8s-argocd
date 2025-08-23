@@ -73,13 +73,15 @@ spec:
         app.kubernetes.io/instance: release-name
     spec:
       
+      imagePullSecrets:
+        - name: ghcr-pull
       serviceAccountName: default
       automountServiceAccountToken: true
       dnsPolicy: ClusterFirst
       enableServiceLinks: true
       containers:
         - name: release-name-nzbget
-          image: "ghcr.io/elfhosted:25.2@sha256:aab5814cc7a89ca4ad04b62d8e7b98725b15697bf711c9982bbcd3fc55d1aab1"
+          image: "ghcr.io/mithr4ndir/nzbget:21.1"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -89,7 +91,8 @@ spec:
             - name: config
               mountPath: /config
             - name: media
-              mountPath: /media
+              mountPath: /downloads
+              subPath: downloads
           livenessProbe:
             tcpSocket:
               port: 6789
