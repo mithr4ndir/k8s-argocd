@@ -1,10 +1,15 @@
 image:
-  repository: ghcr.io/elfhosted
+  repository: ghcr.io/mithr4ndir/nzbget
+  tag: "21.1"
   pullPolicy: IfNotPresent
-  tag: 25.2@sha256:aab5814cc7a89ca4ad04b62d8e7b98725b15697bf711c9982bbcd3fc55d1aab1
+
+# remove if your GHCR package is public
+imagePullSecrets:
+  - name: ghcr-pull
+
 service:
   main:
-    annotations: 
+    annotations:
       metallb.universe.tf/allow-shared-ip: media-shared
     type: LoadBalancer
     loadBalancerIP: 192.168.1.226
@@ -12,38 +17,50 @@ service:
     ports:
       main:
         port: 10057
-        targetPort: 6789
+        targetPort: http       # <- chart maps this to containerPort name
+
 persistence:
   config:
     enabled: true
     mountPath: "/config"
     storageClass: k8s-nfs
+    size: 1Gi
   media:
     enabled: true
-    mountPath: "/media"
-    existingClaim: 'jellyfin-media'
+    existingClaim: "jellyfin-media"
+    mountPath: "/downloads"
+    subPath: downloads        # <- /mnt/tank/media/downloads
+
 workload:
   main:
     podSpec:
-      # POD-LEVEL security context (applies to all containers/volumes in the pod)
       securityContext:
-        runAsUser: 1000           # match your NAS/NFS uid
-        runAsGroup: 1000          # match your NAS/NFS gid
-        fsGroup: 1000             # ensures files/dirs are accessible to the group
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
         fsGroupChangePolicy: "OnRootMismatch"
       containers:
         main:
-          # CONTAINER-LEVEL security context (hardens the container)
+          env:
+            TZ: "America/Los_Angeles"  # adjust
+            PUID: "1000"
+            PGID: "1000"
+            UMASK: "002"
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false    # set true only if your app doesn’t write to root fs
+            readOnlyRootFilesystem: false
             capabilities:
-              drop:
-                - ALL
+              drop: ["ALL"]
           probes:
             liveness:
-              enabled: false
+              enabled: true
+              custom: true
+              spec:
+                httpGet: { path: "/", port: 6789 }
             readiness:
-              enabled: false
+              enabled: true
+              custom: true
+              spec:
+                httpGet: { path: "/", port: 6789 }
             startup:
               enabled: false
