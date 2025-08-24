@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/mithr4ndir/nzbget
-  tag: "21.1.3"
+  tag: "21.1.4"
   pullPolicy: IfNotPresent
 
 # remove if your GHCR package is public
