@@ -3,7 +3,6 @@ image:
   tag: "21.1.5"
   pullPolicy: IfNotPresent
 
-# remove if your GHCR package is public
 imagePullSecrets:
   - name: ghcr-pull
 
@@ -16,8 +15,8 @@ service:
     externalTrafficPolicy: Cluster
     ports:
       main:
-        port: 10057
-        targetPort: http       # <- chart maps this to containerPort name
+        port: 10057         # external service port
+        targetPort: http    # maps to containerPort name
 
 persistence:
   config:
@@ -29,38 +28,53 @@ persistence:
     enabled: true
     existingClaim: "jellyfin-media"
     mountPath: "/downloads"
-    subPath: downloads        # <- /mnt/tank/media/downloads
+    subPath: downloads
 
+# These must be TOP-LEVEL for this chart:
+podSecurityContext:
+  fsGroup: 1000
+  fsGroupChangePolicy: "OnRootMismatch"
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop: ["ALL"]
+
+# Seed nzbget.conf without chown (NFS-safe)
 workload:
   main:
     podSpec:
-      securityContext:
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
-        fsGroupChangePolicy: "OnRootMismatch"
       containers:
         main:
           env:
-            TZ: "America/Los_Angeles"  # adjust
+            TZ: "America/Los_Angeles"
             PUID: "1000"
             PGID: "1000"
             UMASK: "002"
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false
-            capabilities:
-              drop: ["ALL"]
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/sh
+                  - -lc
+                  - |
+                    if [ ! -f /config/nzbget.conf ] && [ -w /config ]; then
+                      cp -n /defaults/nzbget.conf /config/nzbget.conf 2>/dev/null || true
+                      chmod 660 /config/nzbget.conf 2>/dev/null || true
+                    else
+                      chmod g+w /config/nzbget.conf 2>/dev/null || true
+                    fi
           probes:
             liveness:
               enabled: true
               custom: true
-              spec:
-                httpGet: { path: "/", port: 6789 }
+              spec: { httpGet: { path: "/", port: 6789 } }
             readiness:
               enabled: true
               custom: true
-              spec:
-                httpGet: { path: "/", port: 6789 }
+              spec: { httpGet: { path: "/", port: 6789 } }
             startup:
               enabled: false
