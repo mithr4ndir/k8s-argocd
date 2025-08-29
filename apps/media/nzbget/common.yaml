@@ -84,7 +84,7 @@ spec:
       enableServiceLinks: true
       containers:
         - name: release-name-nzbget
-          image: "ghcr.io/mithr4ndir/nzbget:21.1.6"
+          image: "ghcr.io/mithr4ndir/nzbget:21.1.7"
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
