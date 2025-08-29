@@ -77,12 +77,23 @@ spec:
         - name: ghcr-pull
       serviceAccountName: default
       automountServiceAccountToken: true
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
       dnsPolicy: ClusterFirst
       enableServiceLinks: true
       containers:
         - name: release-name-nzbget
           image: "ghcr.io/mithr4ndir/nzbget:21.1.5"
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: false
+            runAsGroup: 1000
+            runAsUser: 1000
           ports:
             - name: http
               containerPort: 6789
