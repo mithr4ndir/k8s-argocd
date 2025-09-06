@@ -84,7 +84,7 @@ spec:
       enableServiceLinks: true
       containers:
         - name: release-name-nzbget
-          image: "lscr.io/linuxserver/nzbget:21.1.7"
+          image: "lscr.io/linuxserver/nzbget:latest"
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
