@@ -1,6 +1,6 @@
 image:
   repository: lscr.io/linuxserver/nzbget
-  tag: "21.1.7"
+  tag: "latest"
   pullPolicy: IfNotPresent
 
 imagePullSecrets:
