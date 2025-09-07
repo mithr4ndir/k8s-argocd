@@ -32,8 +32,7 @@ persistence:
   media:
     enabled: true
     existingClaim: "jellyfin-media"
-    mountPath: "/downloads"
-    subPath: downloads
+    mountPath: "/media"
 
 # These must be TOP-LEVEL for this chart:
 podSecurityContext:
