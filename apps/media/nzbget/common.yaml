@@ -93,6 +93,7 @@ spec:
               - SETUID
               - SETGID
               - CHOWN
+              - CHMOD
               drop:
               - ALL
             readOnlyRootFilesystem: false
@@ -117,22 +118,22 @@ spec:
           livenessProbe:
             tcpSocket:
               port: 6789
-            initialDelaySeconds: 60
+            initialDelaySeconds: 0
             failureThreshold: 3
             timeoutSeconds: 1
             periodSeconds: 10
           readinessProbe:
             tcpSocket:
               port: 6789
-            initialDelaySeconds: 30
+            initialDelaySeconds: 0
             failureThreshold: 3
             timeoutSeconds: 1
-            periodSeconds: 5
+            periodSeconds: 10
           startupProbe:
             tcpSocket:
               port: 6789
-            initialDelaySeconds: 10
-            failureThreshold: 120
+            initialDelaySeconds: 0
+            failureThreshold: 30
             timeoutSeconds: 1
             periodSeconds: 5
       volumes:
