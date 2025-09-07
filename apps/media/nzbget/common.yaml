@@ -117,22 +117,22 @@ spec:
           livenessProbe:
             tcpSocket:
               port: 6789
-            initialDelaySeconds: 0
+            initialDelaySeconds: 60
             failureThreshold: 3
             timeoutSeconds: 1
             periodSeconds: 10
           readinessProbe:
             tcpSocket:
               port: 6789
-            initialDelaySeconds: 0
+            initialDelaySeconds: 30
             failureThreshold: 3
             timeoutSeconds: 1
-            periodSeconds: 10
+            periodSeconds: 5
           startupProbe:
             tcpSocket:
               port: 6789
-            initialDelaySeconds: 0
-            failureThreshold: 30
+            initialDelaySeconds: 10
+            failureThreshold: 120
             timeoutSeconds: 1
             periodSeconds: 5
       volumes:
