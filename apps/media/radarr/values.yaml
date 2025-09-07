@@ -69,7 +69,6 @@ persistence:
     accessMode: ReadWriteMany
     size: 2Gi
     storageClass: k8s-nfs
-    # existingClaim: radarr-config
     globalMounts:
       - path: /config
 
@@ -84,5 +83,5 @@ persistence:
     enabled: true
     existingClaim: jellyfin-media
     globalMounts:
-      - path: /libary
+      - path: /library
         subPath: library
