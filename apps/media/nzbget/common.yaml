@@ -113,8 +113,7 @@ spec:
             - name: config
               mountPath: /config
             - name: media
-              mountPath: /downloads
-              subPath: downloads
+              mountPath: /media
           livenessProbe:
             tcpSocket:
               port: 6789
