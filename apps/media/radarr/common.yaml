@@ -131,11 +131,11 @@ spec:
           - mountPath: /config
             name: config
           - mountPath: /media
-            name: downloads
+            name: media
       volumes: 
         - name: config
           persistentVolumeClaim:
             claimName: radarr-config
-        - name: downloads
+        - name: media
           persistentVolumeClaim:
             claimName: jellyfin-media
