@@ -133,7 +133,7 @@ spec:
           - mountPath: /downloads
             name: downloads
             subPath: downloads
-          - mountPath: /libary
+          - mountPath: /library
             name: library
             subPath: library
       volumes: 
