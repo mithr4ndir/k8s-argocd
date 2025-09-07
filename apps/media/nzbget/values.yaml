@@ -46,7 +46,7 @@ securityContext:
   readOnlyRootFilesystem: false
   capabilities:
     drop: ["ALL"]
-    add: ["SETUID", "SETGID", "CHOWN"] # needed for nzbget
+    add: ["SETUID", "SETGID", "CHOWN", "CHMOD"] # needed for nzbget
 
 # Seed nzbget.conf without chown (NFS-safe)
 workload:
