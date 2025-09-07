@@ -18,6 +18,11 @@ service:
         port: 10057         # external service port
         targetPort: http    # maps to containerPort name
 
+env:
+  TZ: "America/Los_Angeles"
+  PUID: "1000"
+  PGID: "1000"
+
 persistence:
   config:
     enabled: true
