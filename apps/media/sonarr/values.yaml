@@ -72,8 +72,17 @@ persistence:
     globalMounts:
       - path: /config
 
-  media:
+  library:
     enabled: true
     existingClaim: jellyfin-media
     globalMounts:
-      - path: /media
+      - path: /library
+        subPath: library
+
+  downloads:
+    enabled: true
+    existingClaim: jellyfin-media
+    globalMounts:
+      - path: /downloads
+        subPath: downloads
+
