@@ -130,19 +130,12 @@ spec:
           volumeMounts:
           - mountPath: /config
             name: config
-          - mountPath: /downloads
-            name: downloads
-            subPath: downloads
-          - mountPath: /library
-            name: library
-            subPath: library
+          - mountPath: /media
+            name: media
       volumes: 
         - name: config
           persistentVolumeClaim:
             claimName: sonarr-config
-        - name: downloads
-          persistentVolumeClaim:
-            claimName: jellyfin-media
-        - name: library
+        - name: media
           persistentVolumeClaim:
             claimName: jellyfin-media
