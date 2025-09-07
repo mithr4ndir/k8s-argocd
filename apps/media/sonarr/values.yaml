@@ -1,0 +1,80 @@
+controllers:
+  main:
+    type: deployment
+    replicas: 1
+    pod:
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+    containers:
+      main:
+        image:
+          repository: lscr.io/linuxserver/sonarr
+          tag: latest
+          pullPolicy: IfNotPresent
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+          allowPrivilegeEscalation: true
+          capabilities:
+            drop: ["ALL"]
+            add: ["SETUID","SETGID","CHOWN"]
+        env:
+          PUID: "1000"
+          PGID: "1000"
+          TZ: "America/Los_Angeles"
+          UMASK: "002"
+        ports:
+          - name: http
+            containerPort: 8989
+        probes:
+          startup:
+            enabled: true
+            custom: true
+            spec:
+              tcpSocket: { port: 8989 }
+              initialDelaySeconds: 10
+              periodSeconds: 5
+              failureThreshold: 120
+          liveness:
+            enabled: true
+            custom: true
+            spec:
+              httpGet: { path: "/", port: 8989 }
+              initialDelaySeconds: 60
+              periodSeconds: 10
+          readiness:
+            enabled: true
+            custom: true
+            spec:
+              httpGet: { path: "/", port: 8989 }
+              initialDelaySeconds: 30
+              periodSeconds: 5
+
+service:
+  main:
+    controller: main
+    type: LoadBalancer
+    annotations:
+      metallb.universe.tf/allow-shared-ip: media-shared
+    loadBalancerIP: 192.168.1.226
+    ports:
+      http:
+        port: 8989
+        targetPort: http
+
+persistence:
+  config:
+    enabled: true
+    accessMode: ReadWriteMany
+    size: 2Gi
+    storageClass: k8s-nfs
+    globalMounts:
+      - path: /config
+
+  media:
+    enabled: true
+    existingClaim: jellyfin-media
+    globalMounts:
+      - path: /downloads
+        subPath: downloads
