@@ -83,5 +83,5 @@ persistence:
     enabled: true
     existingClaim: jellyfin-media
     globalMounts:
-      - path: /libary
+      - path: /library
         subPath: library
