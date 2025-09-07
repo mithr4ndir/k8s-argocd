@@ -1,5 +1,5 @@
 # -----------------------------
-# jellyfin Helm + Kustomize Make
+# nzbget Helm + Kustomize Make
 # -----------------------------
 
 HELM_CHART_REPO ?= https://k8s-at-home.com/charts/
