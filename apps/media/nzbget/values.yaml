@@ -43,10 +43,11 @@ podSecurityContext:
 securityContext:
   runAsUser: 0
   runAsGroup: 0
-  allowPrivilegeEscalation: false
+  allowPrivilegeEscalation: true
   readOnlyRootFilesystem: false
   capabilities:
     drop: ["ALL"]
+    add: ["SETUID", "SETGID", "CHOWN"] # needed for nzbget
 
 # Seed nzbget.conf without chown (NFS-safe)
 workload:
