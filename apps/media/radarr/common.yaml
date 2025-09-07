@@ -130,19 +130,12 @@ spec:
           volumeMounts:
           - mountPath: /config
             name: config
-          - mountPath: /downloads
+          - mountPath: /media
             name: downloads
-            subPath: downloads
-          - mountPath: /library
-            name: library
-            subPath: library
       volumes: 
         - name: config
           persistentVolumeClaim:
             claimName: radarr-config
         - name: downloads
-          persistentVolumeClaim:
-            claimName: jellyfin-media
-        - name: library
           persistentVolumeClaim:
             claimName: jellyfin-media
