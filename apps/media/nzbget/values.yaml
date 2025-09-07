@@ -36,8 +36,8 @@ podSecurityContext:
   fsGroupChangePolicy: "OnRootMismatch"
 
 securityContext:
-  runAsUser: 1000
-  runAsGroup: 1000
+  runAsUser: 0
+  runAsGroup: 0
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: false
   capabilities:
@@ -68,13 +68,25 @@ workload:
                       chmod g+w /config/nzbget.conf 2>/dev/null || true
                     fi
           probes:
+            startup:
+              enabled: true
+              custom: true
+              spec:
+                httpGet: { path: "/", port: 6789 }
+                initialDelaySeconds: 10
+                periodSeconds: 5
+                failureThreshold: 60
             liveness:
               enabled: true
               custom: true
-              spec: { httpGet: { path: "/", port: 6789 } }
+              spec:
+                httpGet: { path: "/", port: 6789 }
+                initialDelaySeconds: 30
+                periodSeconds: 10
             readiness:
               enabled: true
               custom: true
-              spec: { httpGet: { path: "/", port: 6789 } }
-            startup:
-              enabled: false
+              spec:
+                httpGet: { path: "/", port: 6789 }
+                initialDelaySeconds: 20
+                periodSeconds: 5
