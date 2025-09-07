@@ -59,6 +59,19 @@ workload:
             PUID: "1000"
             PGID: "1000"
             UMASK: "002"
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/sh
+                  - -lc
+                  - |
+                    if [ ! -f /config/nzbget.conf ] && [ -w /config ]; then
+                      cp -n /defaults/nzbget.conf /config/nzbget.conf 2>/dev/null || true
+                      chmod 660 /config/nzbget.conf 2>/dev/null || true
+                    else
+                      chmod g+w /config/nzbget.conf 2>/dev/null || true
+                    fi
           probes:
             startup:
               enabled: true
