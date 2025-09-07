@@ -94,6 +94,13 @@ spec:
             readOnlyRootFilesystem: false
             runAsGroup: 0
             runAsUser: 0
+          env:
+            - name: PGID
+              value: "1000"
+            - name: PUID
+              value: "1000"
+            - name: TZ
+              value: America/Los_Angeles
           ports:
             - name: http
               containerPort: 6789
