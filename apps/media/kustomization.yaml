@@ -4,5 +4,7 @@ resources:
   - media-pv-nfs.yaml
   - jellyfin/
   - nzbget/
-  #- radarr/
-  #- sonarr/
+  - radarr/
+  - sonarr/
+  - prowlarr/
+  - jellyseer/
