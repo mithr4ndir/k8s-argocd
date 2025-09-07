@@ -132,13 +132,7 @@ spec:
           volumeMounts:
           - mountPath: /app/config
             name: config
-          - mountPath: /downloads
-            name: media
-            subPath: downloads
       volumes: 
         - name: config
           persistentVolumeClaim:
             claimName: jellyseerr-config
-        - name: media
-          persistentVolumeClaim:
-            claimName: jellyfin-media

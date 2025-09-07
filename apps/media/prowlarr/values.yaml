@@ -72,10 +72,3 @@ persistence:
     # existingClaim: prowlarr-config
     globalMounts:
       - path: /config
-
-  media:
-    enabled: true
-    existingClaim: jellyfin-media
-    globalMounts:
-      - path: /downloads
-        subPath: downloads

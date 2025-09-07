@@ -73,10 +73,3 @@ persistence:
     # existingClaim: jellyseerr-config
     globalMounts:
       - path: /app/config      # NOTE: jellyseerr expects /app/config
-
-  media:
-    enabled: true
-    existingClaim: jellyfin-media
-    globalMounts:
-      - path: /downloads
-        subPath: downloads
