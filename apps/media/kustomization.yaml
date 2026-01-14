@@ -4,6 +4,7 @@ resources:
   - media-pv-nfs.yaml
   - jellyfin/
   - nzbget/
+  - qbittorrent/
   - radarr/
   - sonarr/
   - prowlarr/
