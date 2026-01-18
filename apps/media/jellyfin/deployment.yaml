@@ -52,10 +52,7 @@ spec:
             tcpSocket:
               port: http
           resources:
-            limits:
-              nvidia.com/gpu: 1
-            requests:
-              nvidia.com/gpu: 1
+            {}
           volumeMounts:
             - mountPath: /config
               name: config
