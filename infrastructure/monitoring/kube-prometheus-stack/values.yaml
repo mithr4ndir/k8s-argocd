@@ -15,6 +15,25 @@ kube-prometheus-stack:
             - targets:
               - '192.168.1.10:9221'
               - '192.168.1.11:9221'
+        - job_name: 'vm-node-exporter'
+          static_configs:
+            - targets:
+              - '192.168.1.88:9100'   # cmd_center1
+              - '192.168.1.90:9100'   # k8cluster1
+              - '192.168.1.89:9100'   # k8cluster2
+              - '192.168.1.91:9100'   # k8cluster3
+              - '192.168.1.92:9100'   # nginx1
+              - '192.168.1.93:9100'   # nginx2
+              - '192.168.1.121:9100'  # grafana
+              - '192.168.1.167:9100'  # elastic
+              - '192.168.1.122:9100'  # timescaledb
+              - '192.168.1.150:9100'  # npm
+              - '192.168.1.10:9100'   # pve
+              - '192.168.1.11:9100'   # pve2
+          relabel_configs:
+            - source_labels: [__address__]
+              regex: '(.*):\d+'
+              target_label: instance
       storageSpec:
         volumeClaimTemplate:
           spec:
