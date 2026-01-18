@@ -15,4 +15,4 @@ spec:
       name: http
   selector:
     app.kubernetes.io/name: prometheus
-    prometheus: kube-prometheus-stack-kube-prometheus
+    prometheus: kube-prometheus-stack-prometheus
