@@ -52,7 +52,10 @@ spec:
             tcpSocket:
               port: http
           resources:
-            {}
+            limits:
+              nvidia.com/gpu: 1
+            requests:
+              nvidia.com/gpu: 1
           volumeMounts:
             - mountPath: /config
               name: config
@@ -65,6 +68,8 @@ spec:
         - name: media
           persistentVolumeClaim:
             claimName: jellyfin-media
+      nodeSelector:
+        nvidia.com/gpu: "true"
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -74,3 +79,4 @@ spec:
                   app.kubernetes.io/name: jellyfin
               topologyKey: kubernetes.io/hostname
             weight: 100
+      runtimeClassName: "nvidia"
