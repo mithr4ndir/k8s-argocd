@@ -20,6 +20,8 @@ spec:
       app.kubernetes.io/instance: release-name
   template:
     metadata:
+      annotations:
+        kubectl.kubernetes.io/restartedAt: "2026-01-18T05:30:00Z"
       labels:
         helm.sh/chart: jellyfin-2.3.0
         app.kubernetes.io/name: jellyfin
@@ -36,7 +38,7 @@ spec:
             runAsGroup: 1000
             runAsUser: 1000
           image: "docker.io/jellyfin/jellyfin:10.10.6"
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8096
