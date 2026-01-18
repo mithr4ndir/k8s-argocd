@@ -29,9 +29,10 @@ filebeat:
                     kubernetes.namespace: "monitoring"
 
       output.elasticsearch:
-        hosts: ["192.168.1.167:9200"]
+        hosts: ["https://192.168.1.167:9200"]
         username: "${ELASTICSEARCH_USERNAME}"
         password: "${ELASTICSEARCH_PASSWORD}"
+        ssl.verification_mode: none
         index: "k8s-logs-%{+yyyy.MM.dd}"
 
       setup.template.name: "k8s-logs"
