@@ -1,0 +1,8 @@
+# Secrets - apply manually, don't commit
+**/secret.yaml
+**/*-secret.yaml
+**/*.secret.yaml
+
+# Helm
+**/charts/
+*.tgz
