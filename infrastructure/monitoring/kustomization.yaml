@@ -1,5 +1,5 @@
-namespace: monitoring
 resources:
   - namespace.yaml
+  - application.yaml
   - prometheus-external-svc.yaml
   - filebeat/secret.yaml
