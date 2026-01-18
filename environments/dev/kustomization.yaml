@@ -2,4 +2,5 @@ resources:
   - ../../infrastructure/metallb
   - ../../infrastructure/nfs
   - ../../infrastructure/nvidia
+  - ../../infrastructure/monitoring
   - ../../apps/media

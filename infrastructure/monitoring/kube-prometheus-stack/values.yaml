@@ -58,9 +58,9 @@ kube-prometheus-stack:
           memory: 100Mi
           cpu: 100m
 
-  # Node exporter for host-level metrics
+  # Node exporter disabled - already deployed via Ansible on k8s nodes
   nodeExporter:
-    enabled: true
+    enabled: false
 
   # Kube state metrics for Kubernetes object metrics
   kubeStateMetrics:
