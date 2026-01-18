@@ -1,0 +1,65 @@
+filebeat:
+  daemonset:
+    enabled: true
+
+  filebeatConfig:
+    filebeat.yml: |
+      filebeat.autodiscover:
+        providers:
+          - type: kubernetes
+            node: ${NODE_NAME}
+            hints.enabled: true
+            hints.default_config:
+              type: container
+              paths:
+                - /var/log/containers/*${data.kubernetes.container.id}.log
+
+      processors:
+        - add_kubernetes_metadata:
+            host: ${NODE_NAME}
+            matchers:
+              - logs_path:
+                  logs_path: "/var/log/containers/"
+        - drop_event:
+            when:
+              or:
+                - equals:
+                    kubernetes.namespace: "kube-system"
+                - equals:
+                    kubernetes.namespace: "monitoring"
+
+      output.elasticsearch:
+        hosts: ["192.168.1.167:9200"]
+        username: "${ELASTICSEARCH_USERNAME}"
+        password: "${ELASTICSEARCH_PASSWORD}"
+        index: "k8s-logs-%{+yyyy.MM.dd}"
+
+      setup.template.name: "k8s-logs"
+      setup.template.pattern: "k8s-logs-*"
+      setup.ilm.enabled: true
+      setup.ilm.rollover_alias: "k8s-logs"
+      setup.ilm.pattern: "{now/d}-000001"
+
+  extraEnvs:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: ELASTICSEARCH_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: elasticsearch-credentials
+          key: username
+    - name: ELASTICSEARCH_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: elasticsearch-credentials
+          key: password
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 100Mi
+    limits:
+      cpu: 500m
+      memory: 200Mi

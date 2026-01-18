@@ -1,0 +1,86 @@
+kube-prometheus-stack:
+  # Prometheus configuration
+  prometheus:
+    prometheusSpec:
+      retention: 15d
+      additionalScrapeConfigs:
+        - job_name: 'proxmox'
+          metrics_path: /pve
+          params:
+            module: [default]
+            cluster: ['1']
+            node: ['1']
+            target: ['localhost']
+          static_configs:
+            - targets:
+              - '192.168.1.10:9221'
+              - '192.168.1.11:9221'
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: nfs-client
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 50Gi
+      externalLabels:
+        cluster: quasarlab-k8s
+      # Resource limits
+      resources:
+        requests:
+          memory: 400Mi
+          cpu: 200m
+        limits:
+          memory: 2Gi
+          cpu: 1000m
+
+  # Disable Grafana - using external Grafana VM at 192.168.1.121
+  grafana:
+    enabled: false
+
+  # Alertmanager configuration
+  alertmanager:
+    enabled: true
+    alertmanagerSpec:
+      storage:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: nfs-client
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 5Gi
+      resources:
+        requests:
+          memory: 50Mi
+          cpu: 10m
+        limits:
+          memory: 100Mi
+          cpu: 100m
+
+  # Node exporter for host-level metrics
+  nodeExporter:
+    enabled: true
+
+  # Kube state metrics for Kubernetes object metrics
+  kubeStateMetrics:
+    enabled: true
+
+  # Scrape kubelet metrics
+  kubelet:
+    enabled: true
+
+  # Scrape kube-proxy metrics
+  kubeProxy:
+    enabled: true
+
+  # Prometheus Operator
+  prometheusOperator:
+    enabled: true
+    resources:
+      requests:
+        memory: 100Mi
+        cpu: 50m
+      limits:
+        memory: 200Mi
+        cpu: 200m
