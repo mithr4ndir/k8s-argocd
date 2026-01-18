@@ -9,3 +9,4 @@ resources:
   - sonarr/
   - prowlarr/
   - jellyseer/
+  - bazarr/
