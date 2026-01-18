@@ -1,3 +1,2 @@
-namespace: media
 resources:
   - common.yaml

@@ -67,6 +67,8 @@ spec:
       app.kubernetes.io/instance: prowlarr
   template:
     metadata:
+      annotations: 
+        kubectl.kubernetes.io/restartedAt: "2026-01-18T05:30:00Z"
       labels: 
         app.kubernetes.io/component: main
         app.kubernetes.io/instance: prowlarr
@@ -93,7 +95,7 @@ spec:
           - name: UMASK
             value: "002"
           image: lscr.io/linuxserver/prowlarr:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           livenessProbe:
             httpGet:
               path: /

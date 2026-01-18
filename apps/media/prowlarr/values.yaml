@@ -3,6 +3,8 @@ controllers:
     type: deployment
     replicas: 1
     pod:
+      annotations:
+        kubectl.kubernetes.io/restartedAt: "2026-01-18T05:30:00Z"
       securityContext:
         fsGroup: 1000
         fsGroupChangePolicy: OnRootMismatch
@@ -11,7 +13,7 @@ controllers:
         image:
           repository: lscr.io/linuxserver/prowlarr
           tag: latest
-          pullPolicy: IfNotPresent
+          pullPolicy: Always
         securityContext:
           runAsUser: 0
           runAsGroup: 0

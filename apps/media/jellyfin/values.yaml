@@ -14,7 +14,7 @@ image:
   # -- Jellyfin container image tag. Leave empty to automatically use the Chart's app version.
   tag: ""
   # -- Image pull policy (Always, IfNotPresent, or Never).
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 # -- Override the default name of the chart.
 nameOverride: "jellyfin"
@@ -33,7 +33,8 @@ serviceAccount:
   name: ""
 
 # -- Annotations to add to the pod.
-podAnnotations: {}
+podAnnotations:
+  kubectl.kubernetes.io/restartedAt: "2026-01-18T05:30:00Z"
 # -- Additional labels to add to the pod.
 podLabels: {}
 
