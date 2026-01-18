@@ -115,12 +115,8 @@ ingress:
   #      - chart-example.local
 
 # -- Resource requests and limits for the Jellyfin container.
-# GPU: Request 1 NVIDIA GPU for hardware transcoding
-resources:
-  limits:
-    nvidia.com/gpu: 1
-  requests:
-    nvidia.com/gpu: 1
+# GPU access via nvidia runtimeClass (no device plugin needed)
+resources: {}
 
 # -- Configure liveness probe for Jellyfin.
 livenessProbe:

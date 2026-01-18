@@ -1,3 +1,3 @@
 resources:
-  - device-plugin.yaml
   - runtime-class.yaml
+  # device-plugin.yaml disabled - needs container toolkit config
