@@ -1,0 +1,141 @@
+---
+# Source: app-template/templates/common.yaml
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: bazarr-config
+  labels:
+    app.kubernetes.io/instance: bazarr
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: bazarr
+    helm.sh/chart: app-template-3.5.1
+spec:
+  accessModes:
+    - "ReadWriteMany"
+  resources:
+    requests:
+      storage: "1Gi"
+  storageClassName: "k8s-nfs"
+---
+# Source: app-template/templates/common.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: bazarr
+  labels:
+    app.kubernetes.io/instance: bazarr
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: bazarr
+    app.kubernetes.io/service: bazarr
+    helm.sh/chart: app-template-3.5.1
+  annotations:
+    metallb.universe.tf/allow-shared-ip: media-shared
+spec:
+  type: LoadBalancer
+  loadBalancerIP: 192.168.1.226
+  ports:
+    - port: 6767
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/component: main
+    app.kubernetes.io/instance: bazarr
+    app.kubernetes.io/name: bazarr
+---
+# Source: app-template/templates/common.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bazarr
+  labels:
+    app.kubernetes.io/component: main
+    app.kubernetes.io/instance: bazarr
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: bazarr
+    helm.sh/chart: app-template-3.5.1
+spec:
+  revisionHistoryLimit: 3
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: main
+      app.kubernetes.io/name: bazarr
+      app.kubernetes.io/instance: bazarr
+  template:
+    metadata:
+      labels: 
+        app.kubernetes.io/component: main
+        app.kubernetes.io/instance: bazarr
+        app.kubernetes.io/name: bazarr
+    spec: 
+      enableServiceLinks: false
+      serviceAccountName: default
+      automountServiceAccountToken: true
+      securityContext: 
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      hostIPC: false
+      hostNetwork: false
+      hostPID: false
+      dnsPolicy: ClusterFirst
+      containers: 
+        - env:
+          - name: PGID
+            value: "1000"
+          - name: PUID
+            value: "1000"
+          - name: TZ
+            value: America/Los_Angeles
+          - name: UMASK
+            value: "002"
+          image: lscr.io/linuxserver/bazarr:latest
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 6767
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          name: main
+          ports:
+          - containerPort: 6767
+            name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 6767
+            initialDelaySeconds: 30
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: true
+            capabilities:
+              add:
+              - SETUID
+              - SETGID
+              - CHOWN
+              drop:
+              - ALL
+            runAsGroup: 0
+            runAsUser: 0
+          startupProbe:
+            failureThreshold: 120
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            tcpSocket:
+              port: 6767
+          volumeMounts:
+          - mountPath: /config
+            name: config
+          - mountPath: /media
+            name: media
+      volumes: 
+        - name: config
+          persistentVolumeClaim:
+            claimName: bazarr-config
+        - name: media
+          persistentVolumeClaim:
+            claimName: jellyfin-media
