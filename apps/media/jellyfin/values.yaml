@@ -55,7 +55,8 @@ securityContext:
   # runAsUser: 1000
 
 # -- Define a custom runtimeClassName for the pod.
-runtimeClassName: ''
+# Use nvidia runtime for GPU access
+runtimeClassName: 'nvidia'
 
 # -- Define a priorityClassName for the pod.
 priorityClassName: ""
@@ -114,13 +115,12 @@ ingress:
   #      - chart-example.local
 
 # -- Resource requests and limits for the Jellyfin container.
-resources: {}
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+# GPU: Request 1 NVIDIA GPU for hardware transcoding
+resources:
+  limits:
+    nvidia.com/gpu: 1
+  requests:
+    nvidia.com/gpu: 1
 
 # -- Configure liveness probe for Jellyfin.
 livenessProbe:
@@ -156,7 +156,9 @@ volumeMounts: []
 #   readOnly: true
 
 # -- Node selector for pod scheduling.
-nodeSelector: {}
+# Schedule on node with NVIDIA GPU
+nodeSelector:
+  nvidia.com/gpu: "true"
 
 # -- Tolerations for pod scheduling.
 tolerations: []
