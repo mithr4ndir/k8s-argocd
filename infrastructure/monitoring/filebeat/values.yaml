@@ -1,6 +1,8 @@
 filebeat:
   daemonset:
     enabled: true
+    # Disable default certificate mounts (using ssl.verification_mode: none)
+    secretMounts: []
 
   filebeatConfig:
     filebeat.yml: |
