@@ -119,10 +119,12 @@ data:
         for alert in alerts:
             summary = alert.get("annotations", {}).get("summary", "")
             instance = alert.get("labels", {}).get("instance", "")
-            if summary:
-                lines.append(f"\u2022 {summary}")
-            elif instance:
-                lines.append(f"\u2022 {instance}")
+            addr = alert.get("labels", {}).get("target_address", "")
+            label = summary or instance or "unknown"
+            if addr and addr != instance:
+                lines.append(f"\u2022 {label} (`{addr}`)")
+            else:
+                lines.append(f"\u2022 {label}")
         alert_list = "\n".join(lines)
 
         description = f"{theme_msg}\n\n{alert_list}"
