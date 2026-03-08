@@ -3,4 +3,5 @@ resources:
   - ../../infrastructure/nfs
   - ../../infrastructure/nvidia
   - ../../infrastructure/monitoring
+  - ../../infrastructure/external-secrets
   - ../../apps/media
