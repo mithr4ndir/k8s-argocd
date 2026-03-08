@@ -2,6 +2,5 @@ resources:
   - namespace.yaml
   - application.yaml
   - prometheus-external-svc.yaml
-  # Secret excluded - apply manually:
-  # kubectl create secret generic elasticsearch-credentials -n monitoring \
-  #   --from-literal=username=elastic --from-literal=password=<YOUR_PASSWORD>
+  - alertmanager-externalsecret.yaml
+  - elasticsearch-externalsecret.yaml
