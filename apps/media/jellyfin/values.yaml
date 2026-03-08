@@ -155,7 +155,6 @@ volumeMounts:
   - name: encoding-config
     mountPath: /config/config/encoding.xml
     subPath: encoding.xml
-    readOnly: true
 
 # -- Node selector for pod scheduling.
 # Schedule on node with NVIDIA GPU
