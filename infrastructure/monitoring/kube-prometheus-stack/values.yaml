@@ -213,6 +213,54 @@ kube-prometheus-stack:
               annotations:
                 summary: "OOM kill on {{ $labels.instance }}"
                 description: "{{ $labels.instance }} had an OOM kill in the last 5 minutes."
+    nfs-and-prometheus:
+      groups:
+        - name: nfs-health
+          rules:
+            - alert: NfsStaleMount
+              expr: node_filesystem_readonly{job="vm-node-exporter", fstype="nfs4"} == 1
+              for: 2m
+              labels:
+                severity: critical
+              annotations:
+                summary: "{{ $labels.instance }} NFS mount read-only on {{ $labels.mountpoint }}"
+                description: "NFS mount {{ $labels.mountpoint }} on {{ $labels.instance }} is read-only, likely stale or TrueNAS unreachable."
+            - alert: NfsMountMissing
+              expr: absent_over_time(node_filesystem_avail_bytes{job="vm-node-exporter", instance=~"k8cluster.*", fstype="nfs4"}[10m])
+              for: 5m
+              labels:
+                severity: critical
+              annotations:
+                summary: "NFS mounts missing from K8s nodes"
+                description: "No NFS filesystem metrics from K8s nodes for 10 minutes. TrueNAS may be unreachable."
+    prometheus-self:
+      groups:
+        - name: prometheus-health
+          rules:
+            - alert: PrometheusTargetScrapeFailures
+              expr: increase(prometheus_target_scrapes_sample_duplicate_timestamp_total[5m]) > 0 or increase(prometheus_target_scrapes_exceeded_body_size_limit_total[5m]) > 0
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Prometheus scrape issues detected"
+                description: "Prometheus is experiencing scrape errors (duplicates or body size exceeded)."
+            - alert: PrometheusTsdbErrors
+              expr: increase(prometheus_tsdb_compactions_failed_total[5m]) > 0 or increase(prometheus_tsdb_wal_corruptions_total[5m]) > 0
+              for: 5m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Prometheus TSDB errors"
+                description: "Prometheus storage is experiencing compaction failures or WAL corruption."
+            - alert: PrometheusRuleEvalFailures
+              expr: increase(prometheus_rule_evaluation_failures_total[5m]) > 0
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Prometheus rule evaluation failures"
+                description: "Prometheus is failing to evaluate alerting/recording rules."
     proxmox-alerts:
       groups:
         - name: proxmox-availability
