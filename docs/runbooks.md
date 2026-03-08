@@ -53,7 +53,7 @@ kubectl get pods -A -o wide
 ```bash
 # 1. Cordon + drain k8cluster2
 kubectl cordon k8cluster2
-kubectl drain k8cluster2 --ignore-daemonsets --delete-emptydir-data --timeout=60s
+kubectl drain k8cluster2 --ignore-daemonsets --delete-emptydir-data --timeout=180s
 
 # 2. Shut down VM 109 on pve2
 ssh root@192.168.1.11 'qm shutdown 109 --timeout 30'
@@ -84,10 +84,14 @@ kubectl get pods -n media -o wide
 ### If PCI Rescan Doesn't Fix It
 Full pve2 reboot is needed. **Warning**: cmd_center1 (VM 105) also runs on pve2 — you will lose SSH access during the reboot.
 
-### Permanent Fixes (TODO)
-- Upgrade nvidia driver from 535 to 550 inside k8cluster2 (550.144.03 fixes RmInitAdapter)
-- Disable GSP firmware: `options nvidia NVreg_EnableGpuFirmware=0` in `/etc/modprobe.d/nvidia.conf`
-- Create PVE hookscript on pve2 to auto PCI-rescan on VM start/stop
+### Permanent Fixes (Applied)
+- **nvidia driver upgraded to 570.211.01** (from 535.288.01) — includes RmInitAdapter fixes from 550+
+- **GSP firmware disabled**: `options nvidia NVreg_EnableGpuFirmware=0` in `/etc/modprobe.d/nvidia.conf` inside k8cluster2
+- **PVE hookscript**: `/var/lib/vz/snippets/gpu-reset.sh` on pve2 — auto PCI remove/rescan on VM 109 start/stop
+  - Attached via: `qm set 109 --hookscript local:snippets/gpu-reset.sh`
+  - Logs to: `/var/log/gpu-reset.log`
+
+**Important**: `sudo reboot` from inside the VM does NOT trigger the hookscript. Always stop/start via PVE (`qm stop 109` / `qm start 109`) to ensure the GPU gets a clean PCI reset.
 
 ---
 
