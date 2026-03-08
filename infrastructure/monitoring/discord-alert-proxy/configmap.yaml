@@ -151,9 +151,14 @@ data:
             if resp.status_code == 429:
                 retry_after = resp.json().get("retry_after", 1)
                 await asyncio.sleep(retry_after)
-                await request.app.state.client.post(
+                resp = await request.app.state.client.post(
                     DISCORD_WEBHOOK_URL,
                     json={"embeds": batch},
+                )
+            if resp.status_code >= 400:
+                return JSONResponse(
+                    status_code=502,
+                    content={"status": "error", "discord_status": resp.status_code},
                 )
 
         return {"status": "ok"}
