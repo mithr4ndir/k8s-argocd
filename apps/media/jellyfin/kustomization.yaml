@@ -7,3 +7,4 @@ resources:
 patches:
   - path: patch-encoding-init.yaml
   - path: patch-graceful-shutdown.yaml
+  - path: patch-reloader.yaml

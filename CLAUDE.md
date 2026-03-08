@@ -57,7 +57,10 @@ k8s-argocd/
 │   ├── nfs/                        # NFS subdir external provisioner v4.0.18
 │   │                               # StorageClass: k8s-nfs, NFS: 192.168.1.15:/mnt/tank/k8s
 │   ├── nvidia/                     # RuntimeClass "nvidia" (device-plugin disabled)
+│   ├── reloader/                   # Stakater Reloader v1.4.14 (auto-restart on ConfigMap/Secret changes)
+│   ├── external-secrets/           # External Secrets Operator + ClusterSecretStore (1Password)
 │   └── monitoring/                 # kube-prometheus-stack v65.8.1, filebeat v8.5.1
+│       ├── discord-alert-proxy/    # Themed alert proxy (Alertmanager → Discord embeds)
 │       ├── application.yaml        # ArgoCD Application resources (Helm type)
 │       ├── kube-prometheus-stack/   # Helm chart wrapper (Chart.yaml + values.yaml)
 │       └── filebeat/               # Helm chart wrapper (Chart.yaml + values.yaml)
@@ -114,8 +117,25 @@ k8s-argocd/
 
 ## Secrets
 
+- Managed via External Secrets Operator (ESO) pulling from 1Password
+- ClusterSecretStore `onepassword-infrastructure` references the `Infrastructure` vault
+- ESO remoteRef format: `<item-id>/<field>` (NOT `op://` URI)
 - Excluded from git via `.gitignore` (`**/secret.yaml`, `**/*-secret.yaml`)
-- Elasticsearch credentials for monitoring applied manually (see monitoring/kustomization.yaml comment)
+
+## Stakater Reloader
+
+- Auto-restarts pods when their mounted ConfigMaps or referenced Secrets change
+- Add `reloader.stakater.com/auto: "true"` annotation to pod template metadata
+- Currently annotated: discord-alert-proxy, jellyfin (via Kustomize patch)
+- For Helm-rendered deployments, add the annotation via a Kustomize patch file (not directly in the rendered YAML)
+
+## Discord Alert Proxy
+
+- FastAPI proxy at `infrastructure/monitoring/discord-alert-proxy/`
+- Alertmanager → webhook_configs → proxy pod (port 9095) → Discord API
+- Themed embeds: LOTR/Balrog (critical/red), Star Wars (warning/orange), fantasy (resolved/green)
+- Groups alerts into single embed, edits existing messages in place on repeat/resolve
+- Discord webhook URL from 1Password via ExternalSecret
 
 ## Environment Notes
 
