@@ -4,4 +4,5 @@ resources:
   - ../../infrastructure/nvidia
   - ../../infrastructure/monitoring
   - ../../infrastructure/external-secrets
+  - ../../infrastructure/reloader
   - ../../apps/media
