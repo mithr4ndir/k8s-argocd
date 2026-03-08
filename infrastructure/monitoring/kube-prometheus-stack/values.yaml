@@ -165,13 +165,21 @@ kube-prometheus-stack:
                 summary: "{{ $labels.instance }} CPU > 90%"
                 description: "{{ $labels.instance }} CPU usage has been above 90% for 10 minutes (current: {{ $value | printf \"%.1f\" }}%)."
             - alert: HighMemoryUsage
-              expr: (1 - node_memory_MemAvailable_bytes{job="vm-node-exporter"} / node_memory_MemTotal_bytes{job="vm-node-exporter"}) * 100 > 90
+              expr: (1 - node_memory_MemAvailable_bytes{job="vm-node-exporter", instance!="192.168.1.15:9100"} / node_memory_MemTotal_bytes{job="vm-node-exporter", instance!="192.168.1.15:9100"}) * 100 > 90
               for: 10m
               labels:
                 severity: warning
               annotations:
                 summary: "{{ $labels.instance }} memory > 90%"
                 description: "{{ $labels.instance }} memory usage has been above 90% for 10 minutes (current: {{ $value | printf \"%.1f\" }}%)."
+            - alert: TrueNasLowMemory
+              expr: node_memory_MemAvailable_bytes{job="vm-node-exporter", instance="192.168.1.15:9100"} < 2 * 1024 * 1024 * 1024
+              for: 10m
+              labels:
+                severity: critical
+              annotations:
+                summary: "TrueNAS available memory < 2GB"
+                description: "TrueNAS has only {{ $value | humanize1024 }}B available. ZFS ARC may not be releasing memory fast enough."
             - alert: DiskSpaceLow
               expr: (1 - node_filesystem_avail_bytes{job="vm-node-exporter", fstype=~"ext4|xfs|zfs", mountpoint!~"/boot.*"} / node_filesystem_size_bytes{job="vm-node-exporter", fstype=~"ext4|xfs|zfs", mountpoint!~"/boot.*"}) * 100 > 85
               for: 10m
