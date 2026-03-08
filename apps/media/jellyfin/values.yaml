@@ -145,17 +145,17 @@ readinessProbe:
   # periodSeconds: 10
 
 # -- Additional volumes to mount in the Jellyfin pod.
-volumes: []
-# - name: foo
-#   secret:
-#     secretName: mysecret
-#     optional: false
+volumes:
+  - name: encoding-config
+    configMap:
+      name: jellyfin-encoding
 
 # -- Additional volume mounts for the Jellyfin container.
-volumeMounts: []
-# - name: foo
-#   mountPath: "/etc/foo"
-#   readOnly: true
+volumeMounts:
+  - name: encoding-config
+    mountPath: /config/config/encoding.xml
+    subPath: encoding.xml
+    readOnly: true
 
 # -- Node selector for pod scheduling.
 # Schedule on node with NVIDIA GPU
