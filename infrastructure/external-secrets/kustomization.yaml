@@ -1,0 +1,8 @@
+resources:
+  - namespace.yaml
+  - application.yaml
+  # ClusterSecretStore depends on ESO CRDs — ArgoCD selfHeal will retry until ready
+  - cluster-secret-store.yaml
+  # Secret excluded - apply manually:
+  # kubectl create secret generic onepassword-service-account-token -n external-secrets \
+  #   --from-literal=token=<YOUR_1PASSWORD_SERVICE_ACCOUNT_TOKEN>
