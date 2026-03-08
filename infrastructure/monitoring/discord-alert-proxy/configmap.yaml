@@ -81,6 +81,58 @@ data:
         ),
     ]
 
+    # In-memory store: group_key -> discord message_id
+    message_store = {}
+
+    def group_key(payload):
+        """Build a stable key from Alertmanager's groupLabels."""
+        group = payload.get("groupLabels", {})
+        parts = sorted(group.items())
+        return "|".join(f"{k}={v}" for k, v in parts)
+
+    def build_embed(payload):
+        alerts = payload.get("alerts", [])
+        group_status = payload.get("status", "firing")
+        common = payload.get("commonLabels", {})
+        alertname = common.get("alertname", "Alert")
+        severity = common.get("severity", "warning")
+
+        if group_status == "resolved":
+            color = 65280
+            theme_msg = random.choice(RESOLVED_MESSAGES)
+            emoji = "\U0001f7e2"
+        elif severity == "critical":
+            color = 16711680
+            theme_msg = random.choice(CRITICAL_MESSAGES)
+            art = random.choice(CRITICAL_ART)
+            theme_msg = f"{theme_msg}\n```\n{art}\n```"
+            emoji = "\U0001f534"
+        else:
+            color = 16744448
+            theme_msg = random.choice(WARNING_MESSAGES)
+            emoji = "\U0001f7e0"
+
+        count = len(alerts)
+        title = f"{emoji} {group_status.upper()} ({count}) {alertname} [{severity}]"
+
+        lines = []
+        for alert in alerts:
+            summary = alert.get("annotations", {}).get("summary", "")
+            instance = alert.get("labels", {}).get("instance", "")
+            if summary:
+                lines.append(f"\u2022 {summary}")
+            elif instance:
+                lines.append(f"\u2022 {instance}")
+        alert_list = "\n".join(lines)
+
+        description = f"{theme_msg}\n\n{alert_list}"
+
+        return {
+            "title": title[:256],
+            "description": description[:4096],
+            "color": color,
+        }
+
     @asynccontextmanager
     async def lifespan(app):
         app.state.client = httpx.AsyncClient(timeout=10)
@@ -96,70 +148,63 @@ data:
     @app.post("/webhook")
     async def webhook(request: Request):
         payload = await request.json()
-        embeds = []
+        alerts = payload.get("alerts", [])
+        if not alerts:
+            return {"status": "ok"}
 
-        for alert in payload.get("alerts", []):
-            status = alert.get("status", "firing")
-            severity = alert.get("labels", {}).get("severity", "warning")
+        key = group_key(payload)
+        embed = build_embed(payload)
+        group_status = payload.get("status", "firing")
+        client = request.app.state.client
 
-            if status == "resolved":
-                color = 65280
-                theme_msg = random.choice(RESOLVED_MESSAGES)
-            elif severity == "critical":
-                color = 16711680
-                theme_msg = random.choice(CRITICAL_MESSAGES)
-                art = random.choice(CRITICAL_ART)
-                theme_msg = f"{theme_msg}\n```\n{art}\n```"
-            else:
-                color = 16744448
-                theme_msg = random.choice(WARNING_MESSAGES)
+        existing_msg_id = message_store.get(key)
 
-            alertname = alert.get("labels", {}).get("alertname", "Unknown")
-            instance = alert.get("labels", {}).get("instance", "")
-            summary = alert.get("annotations", {}).get("summary", alertname)
-            description = alert.get("annotations", {}).get("description", "")
-
-            if status == "resolved":
-                emoji = "\U0001f7e2"
-            elif severity == "critical":
-                emoji = "\U0001f534"
-            else:
-                emoji = "\U0001f7e0"
-
-            title = f"{emoji} {status.upper()}: {summary}"
-
-            embed = {
-                "title": title[:256],
-                "description": f"{theme_msg}\n\n{description}"[:4096],
-                "color": color,
-                "fields": [],
-            }
-
-            if instance:
-                embed["fields"].append({"name": "Instance", "value": instance, "inline": True})
-            embed["fields"].append({"name": "Severity", "value": severity, "inline": True})
-            embed["fields"].append({"name": "Alert", "value": alertname, "inline": True})
-
-            embeds.append(embed)
-
-        for i in range(0, len(embeds), 10):
-            batch = embeds[i:i + 10]
-            resp = await request.app.state.client.post(
-                DISCORD_WEBHOOK_URL,
-                json={"embeds": batch},
+        if existing_msg_id:
+            # Try to edit the existing message
+            resp = await client.patch(
+                f"{DISCORD_WEBHOOK_URL}/messages/{existing_msg_id}",
+                json={"embeds": [embed]},
             )
             if resp.status_code == 429:
                 retry_after = resp.json().get("retry_after", 1)
                 await asyncio.sleep(retry_after)
-                resp = await request.app.state.client.post(
-                    DISCORD_WEBHOOK_URL,
-                    json={"embeds": batch},
+                resp = await client.patch(
+                    f"{DISCORD_WEBHOOK_URL}/messages/{existing_msg_id}",
+                    json={"embeds": [embed]},
                 )
-            if resp.status_code >= 400:
+            # If edit succeeded, clean up on resolved
+            if resp.status_code < 400:
+                if group_status == "resolved":
+                    message_store.pop(key, None)
+                return {"status": "ok"}
+            # If message was deleted (404), fall through to post a new one
+            if resp.status_code != 404:
                 return JSONResponse(
                     status_code=502,
                     content={"status": "error", "discord_status": resp.status_code},
                 )
+
+        # Post a new message (with ?wait=true to get the message ID back)
+        resp = await client.post(
+            f"{DISCORD_WEBHOOK_URL}?wait=true",
+            json={"embeds": [embed]},
+        )
+        if resp.status_code == 429:
+            retry_after = resp.json().get("retry_after", 1)
+            await asyncio.sleep(retry_after)
+            resp = await client.post(
+                f"{DISCORD_WEBHOOK_URL}?wait=true",
+                json={"embeds": [embed]},
+            )
+        if resp.status_code >= 400:
+            return JSONResponse(
+                status_code=502,
+                content={"status": "error", "discord_status": resp.status_code},
+            )
+
+        msg_id = resp.json().get("id")
+        if msg_id and group_status != "resolved":
+            message_store[key] = msg_id
 
         return {"status": "ok"}
 
