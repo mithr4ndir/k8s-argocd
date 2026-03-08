@@ -52,12 +52,12 @@ spec:
             tcpSocket:
               port: http
           resources:
-            requests:
-              cpu: "2"
-              memory: "8Gi"
             limits:
               cpu: "6"
-              memory: "12Gi"
+              memory: 12Gi
+            requests:
+              cpu: "2"
+              memory: 8Gi
           volumeMounts:
             - mountPath: /config
               name: config
