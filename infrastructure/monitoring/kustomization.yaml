@@ -2,6 +2,6 @@ resources:
   - namespace.yaml
   - application.yaml
   - prometheus-external-svc.yaml
-  - alertmanager-externalsecret.yaml
+  - alertmanager-config.yaml
   - elasticsearch-externalsecret.yaml
   - discord-alert-proxy
