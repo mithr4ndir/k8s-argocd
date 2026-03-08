@@ -81,25 +81,17 @@ data:
         ),
     ]
 
-    @asynccontextmanager
-    async def lifespan(app):
-        app.state.client = httpx.AsyncClient(timeout=10)
-        yield
-        await app.state.client.aclose()
+    # In-memory store: group_key -> discord message_id
+    message_store = {}
 
-    app = FastAPI(lifespan=lifespan)
+    def group_key(payload):
+        """Build a stable key from Alertmanager's groupLabels."""
+        group = payload.get("groupLabels", {})
+        parts = sorted(group.items())
+        return "|".join(f"{k}={v}" for k, v in parts)
 
-    @app.get("/health")
-    async def health():
-        return {"status": "healthy"}
-
-    @app.post("/webhook")
-    async def webhook(request: Request):
-        payload = await request.json()
+    def build_embed(payload):
         alerts = payload.get("alerts", [])
-        if not alerts:
-            return {"status": "ok"}
-
         group_status = payload.get("status", "firing")
         common = payload.get("commonLabels", {})
         alertname = common.get("alertname", "Alert")
@@ -135,21 +127,73 @@ data:
 
         description = f"{theme_msg}\n\n{alert_list}"
 
-        embed = {
+        return {
             "title": title[:256],
             "description": description[:4096],
             "color": color,
         }
 
-        resp = await request.app.state.client.post(
-            DISCORD_WEBHOOK_URL,
+    @asynccontextmanager
+    async def lifespan(app):
+        app.state.client = httpx.AsyncClient(timeout=10)
+        yield
+        await app.state.client.aclose()
+
+    app = FastAPI(lifespan=lifespan)
+
+    @app.get("/health")
+    async def health():
+        return {"status": "healthy"}
+
+    @app.post("/webhook")
+    async def webhook(request: Request):
+        payload = await request.json()
+        alerts = payload.get("alerts", [])
+        if not alerts:
+            return {"status": "ok"}
+
+        key = group_key(payload)
+        embed = build_embed(payload)
+        group_status = payload.get("status", "firing")
+        client = request.app.state.client
+
+        existing_msg_id = message_store.get(key)
+
+        if existing_msg_id:
+            # Try to edit the existing message
+            resp = await client.patch(
+                f"{DISCORD_WEBHOOK_URL}/messages/{existing_msg_id}",
+                json={"embeds": [embed]},
+            )
+            if resp.status_code == 429:
+                retry_after = resp.json().get("retry_after", 1)
+                await asyncio.sleep(retry_after)
+                resp = await client.patch(
+                    f"{DISCORD_WEBHOOK_URL}/messages/{existing_msg_id}",
+                    json={"embeds": [embed]},
+                )
+            # If edit succeeded, clean up on resolved
+            if resp.status_code < 400:
+                if group_status == "resolved":
+                    message_store.pop(key, None)
+                return {"status": "ok"}
+            # If message was deleted (404), fall through to post a new one
+            if resp.status_code != 404:
+                return JSONResponse(
+                    status_code=502,
+                    content={"status": "error", "discord_status": resp.status_code},
+                )
+
+        # Post a new message (with ?wait=true to get the message ID back)
+        resp = await client.post(
+            f"{DISCORD_WEBHOOK_URL}?wait=true",
             json={"embeds": [embed]},
         )
         if resp.status_code == 429:
             retry_after = resp.json().get("retry_after", 1)
             await asyncio.sleep(retry_after)
-            resp = await request.app.state.client.post(
-                DISCORD_WEBHOOK_URL,
+            resp = await client.post(
+                f"{DISCORD_WEBHOOK_URL}?wait=true",
                 json={"embeds": [embed]},
             )
         if resp.status_code >= 400:
@@ -157,6 +201,10 @@ data:
                 status_code=502,
                 content={"status": "error", "discord_status": resp.status_code},
             )
+
+        msg_id = resp.json().get("id")
+        if msg_id and group_status != "resolved":
+            message_store[key] = msg_id
 
         return {"status": "ok"}
 
