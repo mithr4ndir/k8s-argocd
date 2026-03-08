@@ -65,7 +65,6 @@ spec:
               name: media
             - mountPath: /config/config/encoding.xml
               name: encoding-config
-              readOnly: true
               subPath: encoding.xml
       volumes:
         - name: config
