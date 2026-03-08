@@ -16,6 +16,9 @@ kube-prometheus-stack:
               - '192.168.1.10:9221'
               - '192.168.1.11:9221'
         - job_name: 'vm-node-exporter'
+          relabel_configs:
+            - source_labels: [__address__]
+              target_label: target_address
           static_configs:
             # pve2 VMs
             - targets: ['192.168.1.88:9100']
