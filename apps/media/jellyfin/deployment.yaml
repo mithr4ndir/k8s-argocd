@@ -63,6 +63,10 @@ spec:
               name: config
             - mountPath: /media
               name: media
+            - mountPath: /config/config/encoding.xml
+              name: encoding-config
+              readOnly: true
+              subPath: encoding.xml
       volumes:
         - name: config
           persistentVolumeClaim:
@@ -70,6 +74,9 @@ spec:
         - name: media
           persistentVolumeClaim:
             claimName: jellyfin-media
+        - configMap:
+            name: jellyfin-encoding
+          name: encoding-config
       nodeSelector:
         nvidia.com/gpu: "true"
       affinity:
