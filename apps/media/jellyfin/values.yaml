@@ -115,8 +115,14 @@ ingress:
   #      - chart-example.local
 
 # -- Resource requests and limits for the Jellyfin container.
-# GPU access via nvidia runtimeClass (no device plugin needed)
-resources: {}
+# RTX 2080 Ti NVENC available via nvidia runtimeClass
+resources:
+  requests:
+    cpu: "2"
+    memory: "8Gi"
+  limits:
+    cpu: "6"
+    memory: "12Gi"
 
 # -- Configure liveness probe for Jellyfin.
 livenessProbe:
