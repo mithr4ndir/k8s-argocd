@@ -51,6 +51,12 @@ stringData:
           group_by: [alertname, node]
           group_wait: 1m
         - matchers:
+            - alertname =~ "ServiceDown|ServiceInactive"
+          receiver: discord
+          group_by: [instance, alertname]
+          group_wait: 1m
+          repeat_interval: 1h
+        - matchers:
             - severity = critical
           receiver: discord
           repeat_interval: 1h
