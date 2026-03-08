@@ -94,9 +94,8 @@ kube-prometheus-stack:
     enabled: false
 
   # Alertmanager configuration
-  # Full config (routes, receivers, Discord webhook) lives in a manually-managed
-  # K8s secret to keep the webhook URL out of this public repo.
-  # See: kubectl get secret alertmanager-custom-config -n monitoring
+  # Config secret is managed by ExternalSecret (alertmanager-external-secret.yaml)
+  # pulling the Discord webhook URL from 1Password.
   alertmanager:
     enabled: true
     alertmanagerSpec:
