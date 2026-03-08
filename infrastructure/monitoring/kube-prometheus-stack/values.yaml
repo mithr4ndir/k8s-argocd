@@ -274,13 +274,20 @@ kube-prometheus-stack:
                 summary: "PVE exporter unreachable at {{ $labels.instance }}"
                 description: "Proxmox exporter {{ $labels.instance }} has been down for 3 minutes."
             - alert: PveGuestDown
-              expr: pve_guest_info{job="proxmox", status!="running", template="0"} == 1
+              expr: |
+                (
+                  (pve_up{job="proxmox", id=~"qemu/.*"} == 0)
+                  and on(id, instance)
+                  (pve_onboot_status{job="proxmox"} == 1)
+                )
+                * on(id, instance) group_left(name, node)
+                (pve_guest_info{job="proxmox", template="0"})
               for: 5m
               labels:
                 severity: warning
               annotations:
-                summary: "PVE guest {{ $labels.name }} is {{ $labels.status }}"
-                description: "VM/CT {{ $labels.name }} on {{ $labels.instance }} has been {{ $labels.status }} for 5 minutes."
+                summary: "VM {{ $labels.name }} is down on {{ $labels.node }}"
+                description: "VM {{ $labels.name }} ({{ $labels.id }}) should be running (onboot=1) but has been stopped for 5 minutes."
         - name: proxmox-resources
           rules:
             - alert: PveHighCpu
