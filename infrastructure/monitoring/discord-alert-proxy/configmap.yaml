@@ -1,0 +1,162 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: discord-alert-proxy-script
+  namespace: monitoring
+data:
+  proxy.py: |
+    import json
+    import os
+    import random
+    import asyncio
+    from contextlib import asynccontextmanager
+
+    import httpx
+    import uvicorn
+    from fastapi import FastAPI, Request
+    from fastapi.responses import JSONResponse
+
+    DISCORD_WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
+
+    CRITICAL_MESSAGES = [
+        "\U0001f525 A Balrog of Morgoth has risen in the depths of Moria!",
+        "\u2694\ufe0f The forces of Mordor march upon our servers!",
+        "\U0001f30b Mount Doom stirs... darkness spreads across the land!",
+        "\U0001f441\ufe0f The Eye of Sauron has turned its gaze upon us!",
+        "\U0001f409 A shadow and a flame... a creature of the ancient world!",
+        "\U0001f480 The Witch-King rides forth \u2014 no man can stop this!",
+        "\U0001f5e1\ufe0f Orcs have breached the walls of Helm's Deep!",
+    ]
+
+    WARNING_MESSAGES = [
+        "\U0001f916 I've got a bad feeling about this... \u2014 Han Solo",
+        "\u26a0\ufe0f Do or do not, there is no try. But right now... we're just trying. \u2014 Yoda",
+        "\U0001f300 It's a trap! ...probably. \u2014 Admiral Ackbar",
+        "\U0001f527 This is where the fun begins... \u2014 Anakin",
+        "\U0001f4ab The garbage chute was a really wonderful idea! \u2014 Leia",
+        "\U0001f438 Much to learn, you still have. \u2014 Yoda",
+        "\U0001f3af Never tell me the odds! \u2014 Han Solo",
+        "\U0001f937 I am altering the deal. Pray I don't alter it any further. \u2014 Vader",
+    ]
+
+    RESOLVED_MESSAGES = [
+        "\U0001f305 The Shire is safe once more. The hobbits can rest easy.",
+        "\u2728 The light of E\u00e4rendil shines bright \u2014 the darkness has passed.",
+        "\U0001f3f0 The white tree of Gondor blooms again!",
+        "\U0001f9d9 A wizard is never late, nor is he early. He arrives precisely when the service comes back online.",
+        "\U0001f33f The Ents have spoken \u2014 the forest is at peace.",
+        "\u2b50 The stars are veiled, but the danger has passed. Sleep well, Middle-earth.",
+        "\U0001f985 The Eagles are coming! ...and they brought uptime.",
+        "\U0001f37a And they all lived happily ever after, with a pint at the Green Dragon.",
+    ]
+
+    CRITICAL_ART = [
+        (
+            "        .-'```'-.       \n"
+            "      .'    _    '.     \n"
+            "     /    /`0`\\    \\    \n"
+            "    |    | /_\\ |    |   \n"
+            "     \\    \\_|_/    /    \n"
+            "      '.   ~~~  .'     \n"
+            "        '-.....-'      "
+        ),
+        (
+            "       /\\             \n"
+            "      /  \\            \n"
+            "     / .. \\           \n"
+            "    / .  . \\          \n"
+            "   /  .  .  \\         \n"
+            "  /   .  .   \\        \n"
+            " /____....____\\       \n"
+            "   Mount Doom         "
+        ),
+        (
+            "    .  .  .  .        \n"
+            "   . \\( )/ .         \n"
+            "  . - {eye} - .       \n"
+            "   . /( )\\ .         \n"
+            "    .  .  .  .        \n"
+            "   The Dark Lord      "
+        ),
+    ]
+
+    @asynccontextmanager
+    async def lifespan(app):
+        app.state.client = httpx.AsyncClient(timeout=10)
+        yield
+        await app.state.client.aclose()
+
+    app = FastAPI(lifespan=lifespan)
+
+    @app.get("/health")
+    async def health():
+        return {"status": "healthy"}
+
+    @app.post("/webhook")
+    async def webhook(request: Request):
+        payload = await request.json()
+        embeds = []
+
+        for alert in payload.get("alerts", []):
+            status = alert.get("status", "firing")
+            severity = alert.get("labels", {}).get("severity", "warning")
+
+            if status == "resolved":
+                color = 65280
+                theme_msg = random.choice(RESOLVED_MESSAGES)
+            elif severity == "critical":
+                color = 16711680
+                theme_msg = random.choice(CRITICAL_MESSAGES)
+                art = random.choice(CRITICAL_ART)
+                theme_msg = f"{theme_msg}\n```\n{art}\n```"
+            else:
+                color = 16744448
+                theme_msg = random.choice(WARNING_MESSAGES)
+
+            alertname = alert.get("labels", {}).get("alertname", "Unknown")
+            instance = alert.get("labels", {}).get("instance", "")
+            summary = alert.get("annotations", {}).get("summary", alertname)
+            description = alert.get("annotations", {}).get("description", "")
+
+            if status == "resolved":
+                emoji = "\U0001f7e2"
+            elif severity == "critical":
+                emoji = "\U0001f534"
+            else:
+                emoji = "\U0001f7e0"
+
+            title = f"{emoji} {status.upper()}: {summary}"
+
+            embed = {
+                "title": title[:256],
+                "description": f"{theme_msg}\n\n{description}"[:4096],
+                "color": color,
+                "fields": [],
+            }
+
+            if instance:
+                embed["fields"].append({"name": "Instance", "value": instance, "inline": True})
+            embed["fields"].append({"name": "Severity", "value": severity, "inline": True})
+            embed["fields"].append({"name": "Alert", "value": alertname, "inline": True})
+
+            embeds.append(embed)
+
+        for i in range(0, len(embeds), 10):
+            batch = embeds[i:i + 10]
+            resp = await request.app.state.client.post(
+                DISCORD_WEBHOOK_URL,
+                json={"embeds": batch},
+            )
+            if resp.status_code == 429:
+                retry_after = resp.json().get("retry_after", 1)
+                await asyncio.sleep(retry_after)
+                await request.app.state.client.post(
+                    DISCORD_WEBHOOK_URL,
+                    json={"embeds": batch},
+                )
+
+        return {"status": "ok"}
+
+    if __name__ == "__main__":
+        uvicorn.run(app, host="0.0.0.0", port=9095)

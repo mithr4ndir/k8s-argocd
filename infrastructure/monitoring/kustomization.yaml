@@ -4,3 +4,4 @@ resources:
   - prometheus-external-svc.yaml
   - alertmanager-externalsecret.yaml
   - elasticsearch-externalsecret.yaml
+  - discord-alert-proxy
