@@ -1,0 +1,59 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: discord-alert-proxy
+  namespace: monitoring
+  labels:
+    app: discord-alert-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: discord-alert-proxy
+  template:
+    metadata:
+      labels:
+        app: discord-alert-proxy
+    spec:
+      containers:
+        - name: proxy
+          image: python:3.12-slim
+          command:
+            - sh
+            - -c
+            - pip install --no-cache-dir fastapi uvicorn httpx && python /app/proxy.py
+          ports:
+            - containerPort: 9095
+          env:
+            - name: DISCORD_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: discord-webhook-url
+                  key: webhook-url
+          volumeMounts:
+            - name: proxy-script
+              mountPath: /app
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 10m
+            limits:
+              memory: 128Mi
+              cpu: 100m
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9095
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9095
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      volumes:
+        - name: proxy-script
+          configMap:
+            name: discord-alert-proxy-script
