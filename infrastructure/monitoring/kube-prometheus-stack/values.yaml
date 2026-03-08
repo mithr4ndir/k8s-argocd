@@ -242,7 +242,7 @@ kube-prometheus-stack:
                 severity: warning
               annotations:
                 summary: "PVE host {{ $labels.id }} CPU > 90%"
-                description: "Proxmox host CPU is at {{ $value | printf \"%.0f\" | multiply 100 }}%."
+                description: "Proxmox host CPU is at {{ $value | humanizePercentage }}."
             - alert: PveHighMemory
               expr: pve_memory_usage_bytes{job="proxmox", id=~"node/.*"} / pve_memory_size_bytes{job="proxmox", id=~"node/.*"} > 0.9
               for: 10m
