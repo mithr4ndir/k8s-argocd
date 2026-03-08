@@ -123,6 +123,126 @@ kube-prometheus-stack:
   kubeProxy:
     enabled: false
 
+  # Custom alerting rules for hypervisors and VMs
+  additionalPrometheusRulesMap:
+    vm-node-alerts:
+      groups:
+        - name: node-availability
+          rules:
+            - alert: NodeDown
+              expr: up{job="vm-node-exporter"} == 0
+              for: 3m
+              labels:
+                severity: critical
+              annotations:
+                summary: "{{ $labels.instance }} is down"
+                description: "Node exporter on {{ $labels.instance }} has been unreachable for 3 minutes."
+        - name: node-resources
+          rules:
+            - alert: HighCpuUsage
+              expr: (1 - avg by(instance) (rate(node_cpu_seconds_total{job="vm-node-exporter", mode="idle"}[5m]))) * 100 > 90
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "{{ $labels.instance }} CPU > 90%"
+                description: "{{ $labels.instance }} CPU usage has been above 90% for 10 minutes (current: {{ $value | printf \"%.1f\" }}%)."
+            - alert: HighMemoryUsage
+              expr: (1 - node_memory_MemAvailable_bytes{job="vm-node-exporter"} / node_memory_MemTotal_bytes{job="vm-node-exporter"}) * 100 > 90
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "{{ $labels.instance }} memory > 90%"
+                description: "{{ $labels.instance }} memory usage has been above 90% for 10 minutes (current: {{ $value | printf \"%.1f\" }}%)."
+            - alert: DiskSpaceLow
+              expr: (1 - node_filesystem_avail_bytes{job="vm-node-exporter", fstype=~"ext4|xfs|zfs", mountpoint!~"/boot.*"} / node_filesystem_size_bytes{job="vm-node-exporter", fstype=~"ext4|xfs|zfs", mountpoint!~"/boot.*"}) * 100 > 85
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "{{ $labels.instance }} disk > 85% on {{ $labels.mountpoint }}"
+                description: "{{ $labels.instance }} filesystem {{ $labels.mountpoint }} is {{ $value | printf \"%.1f\" }}% full."
+            - alert: DiskSpaceCritical
+              expr: (1 - node_filesystem_avail_bytes{job="vm-node-exporter", fstype=~"ext4|xfs|zfs", mountpoint!~"/boot.*"} / node_filesystem_size_bytes{job="vm-node-exporter", fstype=~"ext4|xfs|zfs", mountpoint!~"/boot.*"}) * 100 > 95
+              for: 5m
+              labels:
+                severity: critical
+              annotations:
+                summary: "{{ $labels.instance }} disk > 95% on {{ $labels.mountpoint }}"
+                description: "{{ $labels.instance }} filesystem {{ $labels.mountpoint }} is {{ $value | printf \"%.1f\" }}% full. Immediate action required."
+            - alert: HighSystemLoad
+              expr: node_load15{job="vm-node-exporter"} / count without(cpu) (count without(mode) (node_cpu_seconds_total{job="vm-node-exporter", mode="idle"})) > 2
+              for: 15m
+              labels:
+                severity: warning
+              annotations:
+                summary: "{{ $labels.instance }} load average is high"
+                description: "{{ $labels.instance }} 15m load average is {{ $value | printf \"%.1f\" }}x the CPU count."
+        - name: node-hardware
+          rules:
+            - alert: NetworkErrors
+              expr: rate(node_network_receive_errs_total{job="vm-node-exporter", device!~"veth.*|cali.*|tunl.*"}[5m]) + rate(node_network_transmit_errs_total{job="vm-node-exporter", device!~"veth.*|cali.*|tunl.*"}[5m]) > 5
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "{{ $labels.instance }} network errors on {{ $labels.device }}"
+                description: "{{ $labels.instance }} interface {{ $labels.device }} is seeing network errors ({{ $value | printf \"%.1f\" }}/s)."
+            - alert: OOMKillDetected
+              expr: increase(node_vmstat_oom_kill{job="vm-node-exporter"}[5m]) > 0
+              labels:
+                severity: warning
+              annotations:
+                summary: "OOM kill on {{ $labels.instance }}"
+                description: "{{ $labels.instance }} had an OOM kill in the last 5 minutes."
+    proxmox-alerts:
+      groups:
+        - name: proxmox-availability
+          rules:
+            - alert: PveExporterDown
+              expr: up{job="proxmox"} == 0
+              for: 3m
+              labels:
+                severity: critical
+              annotations:
+                summary: "PVE exporter unreachable at {{ $labels.instance }}"
+                description: "Proxmox exporter {{ $labels.instance }} has been down for 3 minutes."
+            - alert: PveGuestDown
+              expr: pve_guest_info{job="proxmox", status!="running", template="0"} == 1
+              for: 5m
+              labels:
+                severity: warning
+              annotations:
+                summary: "PVE guest {{ $labels.name }} is {{ $labels.status }}"
+                description: "VM/CT {{ $labels.name }} on {{ $labels.instance }} has been {{ $labels.status }} for 5 minutes."
+        - name: proxmox-resources
+          rules:
+            - alert: PveHighCpu
+              expr: pve_cpu_usage_ratio{job="proxmox", id=~"node/.*"} > 0.9
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "PVE host {{ $labels.id }} CPU > 90%"
+                description: "Proxmox host CPU is at {{ $value | printf \"%.0f\" | multiply 100 }}%."
+            - alert: PveHighMemory
+              expr: pve_memory_usage_bytes{job="proxmox", id=~"node/.*"} / pve_memory_size_bytes{job="proxmox", id=~"node/.*"} > 0.9
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "PVE host {{ $labels.id }} memory > 90%"
+                description: "Proxmox host memory usage is above 90%."
+            - alert: PveStorageHigh
+              expr: pve_disk_usage_bytes{job="proxmox", id=~"storage/.*"} / pve_disk_size_bytes{job="proxmox", id=~"storage/.*"} > 0.85
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "PVE storage {{ $labels.id }} > 85%"
+                description: "Proxmox storage {{ $labels.id }} is above 85% capacity."
+
   # Prometheus Operator
   prometheusOperator:
     enabled: true
