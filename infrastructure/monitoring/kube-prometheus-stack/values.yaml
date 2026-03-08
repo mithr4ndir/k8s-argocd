@@ -17,36 +17,49 @@ kube-prometheus-stack:
               - '192.168.1.11:9221'
         - job_name: 'vm-node-exporter'
           static_configs:
+            # pve2 VMs
             - targets: ['192.168.1.88:9100']
               labels:
                 instance: cmd_center1
-            - targets: ['192.168.1.90:9100']
-              labels:
-                instance: k8cluster1
+                hypervisor: pve2
             - targets: ['192.168.1.89:9100']
               labels:
                 instance: k8cluster2
+                hypervisor: pve2
+            # pve VMs
+            - targets: ['192.168.1.90:9100']
+              labels:
+                instance: k8cluster1
+                hypervisor: pve
             - targets: ['192.168.1.91:9100']
               labels:
                 instance: k8cluster3
+                hypervisor: pve
             - targets: ['192.168.1.92:9100']
               labels:
                 instance: nginx1
+                hypervisor: pve
             - targets: ['192.168.1.93:9100']
               labels:
                 instance: nginx2
+                hypervisor: pve
             - targets: ['192.168.1.121:9100']
               labels:
                 instance: grafana
+                hypervisor: pve
             - targets: ['192.168.1.167:9100']
               labels:
                 instance: elastic
+                hypervisor: pve
             - targets: ['192.168.1.122:9100']
               labels:
                 instance: timescaledb
+                hypervisor: pve
             - targets: ['192.168.1.150:9100']
               labels:
                 instance: npm
+                hypervisor: pve
+            # Bare-metal PVE hosts (not VMs)
             - targets: ['192.168.1.10:9100']
               labels:
                 instance: pve
