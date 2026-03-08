@@ -164,7 +164,7 @@ kube-prometheus-stack:
                 summary: "{{ $labels.instance }} CPU > 90%"
                 description: "{{ $labels.instance }} CPU usage has been above 90% for 10 minutes (current: {{ $value | printf \"%.1f\" }}%)."
             - alert: HighMemoryUsage
-              expr: (1 - node_memory_MemAvailable_bytes{job="vm-node-exporter", instance!="192.168.1.15:9100"} / node_memory_MemTotal_bytes{job="vm-node-exporter", instance!="192.168.1.15:9100"}) * 100 > 90
+              expr: (1 - node_memory_MemAvailable_bytes{job="vm-node-exporter", instance!="truenas"} / node_memory_MemTotal_bytes{job="vm-node-exporter", instance!="truenas"}) * 100 > 90
               for: 10m
               labels:
                 severity: warning
@@ -172,7 +172,7 @@ kube-prometheus-stack:
                 summary: "{{ $labels.instance }} memory > 90%"
                 description: "{{ $labels.instance }} memory usage has been above 90% for 10 minutes (current: {{ $value | printf \"%.1f\" }}%)."
             - alert: TrueNasLowMemory
-              expr: node_memory_MemAvailable_bytes{job="vm-node-exporter", instance="192.168.1.15:9100"} < 2 * 1024 * 1024 * 1024
+              expr: node_memory_MemAvailable_bytes{job="vm-node-exporter", instance="truenas"} < 2 * 1024 * 1024 * 1024
               for: 10m
               labels:
                 severity: critical
