@@ -310,6 +310,35 @@ kube-prometheus-stack:
                 summary: "PVE storage {{ $labels.id }} > 85%"
                 description: "Proxmox storage {{ $labels.id }} is above 85% capacity."
 
+    system-updates:
+      groups:
+        - name: unattended-upgrades
+          rules:
+            - alert: RebootRequired
+              expr: node_reboot_required{job="vm-node-exporter"} == 1
+              for: 30m
+              labels:
+                severity: warning
+              annotations:
+                summary: "{{ $labels.instance }} requires a reboot"
+                description: "{{ $labels.instance }} has pending updates that require a reboot."
+            - alert: UnattendedUpgradesFailed
+              expr: unattended_upgrades_success{job="vm-node-exporter"} == 0
+              for: 5m
+              labels:
+                severity: warning
+              annotations:
+                summary: "{{ $labels.instance }} unattended-upgrades failed"
+                description: "Automatic security updates failed on {{ $labels.instance }}. Check /var/log/unattended-upgrades/."
+            - alert: SecurityUpdatesPending
+              expr: unattended_upgrades_pending_security{job="vm-node-exporter"} > 0
+              for: 24h
+              labels:
+                severity: warning
+              annotations:
+                summary: "{{ $labels.instance }} has {{ $value }} pending security updates"
+                description: "{{ $labels.instance }} has had pending security updates for over 24 hours."
+
   # Prometheus Operator
   prometheusOperator:
     enabled: true
