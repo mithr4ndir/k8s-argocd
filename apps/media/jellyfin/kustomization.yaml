@@ -4,7 +4,6 @@ resources:
   - encoding-configmap.yaml
   - deployment.yaml
   - service.yaml
-  - ingress.yaml
 patches:
   - path: patch-encoding-init.yaml
   - path: patch-graceful-shutdown.yaml
