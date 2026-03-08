@@ -53,6 +53,10 @@ kube-prometheus-stack:
             - targets: ['192.168.1.11:9100']
               labels:
                 instance: pve2
+            # NAS
+            - targets: ['192.168.1.15:9100']
+              labels:
+                instance: truenas
       storageSpec:
         volumeClaimTemplate:
           spec:
