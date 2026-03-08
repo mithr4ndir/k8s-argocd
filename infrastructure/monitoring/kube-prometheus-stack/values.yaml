@@ -112,9 +112,16 @@ kube-prometheus-stack:
   kubelet:
     enabled: true
 
-  # Scrape kube-proxy metrics
+  # Disable scraping/rules for components that bind to 127.0.0.1 on kubeadm
+  # and aren't reachable by default ServiceMonitors
+  kubeControllerManager:
+    enabled: false
+  kubeScheduler:
+    enabled: false
+  kubeEtcd:
+    enabled: false
   kubeProxy:
-    enabled: true
+    enabled: false
 
   # Prometheus Operator
   prometheusOperator:
