@@ -63,9 +63,6 @@ spec:
               name: config
             - mountPath: /media
               name: media
-            - mountPath: /config/config/encoding.xml
-              name: encoding-config
-              subPath: encoding.xml
       volumes:
         - name: config
           persistentVolumeClaim:

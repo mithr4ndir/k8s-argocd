@@ -145,16 +145,14 @@ readinessProbe:
   # periodSeconds: 10
 
 # -- Additional volumes to mount in the Jellyfin pod.
+# encoding-config volume is added via Kustomize patch (patch-encoding-init.yaml)
 volumes:
   - name: encoding-config
     configMap:
       name: jellyfin-encoding
 
 # -- Additional volume mounts for the Jellyfin container.
-volumeMounts:
-  - name: encoding-config
-    mountPath: /config/config/encoding.xml
-    subPath: encoding.xml
+volumeMounts: []
 
 # -- Node selector for pod scheduling.
 # Schedule on node with NVIDIA GPU

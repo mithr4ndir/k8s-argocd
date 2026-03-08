@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: copy-encoding-config
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - cp /encoding-configmap/encoding.xml /config/config/encoding.xml && chown 1000:1000 /config/config/encoding.xml
+          volumeMounts:
+            - name: encoding-config
+              mountPath: /encoding-configmap
+            - name: config
+              mountPath: /config
