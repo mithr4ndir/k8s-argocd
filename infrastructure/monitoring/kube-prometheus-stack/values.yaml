@@ -346,6 +346,27 @@ kube-prometheus-stack:
                 summary: "{{ $labels.instance }} has {{ $value }} pending security updates"
                 description: "{{ $labels.instance }} has had pending security updates for over 24 hours."
 
+    service-down-alerts:
+      groups:
+        - name: service-health
+          rules:
+            - alert: ServiceDown
+              expr: node_systemd_unit_state{job="vm-node-exporter", state="failed"} == 1
+              for: 2m
+              labels:
+                severity: critical
+              annotations:
+                summary: "{{ $labels.name }} is down on {{ $labels.instance }}"
+                description: "Systemd unit {{ $labels.name }} has been in failed state on {{ $labels.instance }} for 2 minutes."
+            - alert: ServiceInactive
+              expr: node_systemd_unit_state{job="vm-node-exporter", state="active"} == 0 and node_systemd_unit_state{job="vm-node-exporter", state="failed"} == 0
+              for: 5m
+              labels:
+                severity: warning
+              annotations:
+                summary: "{{ $labels.name }} is not running on {{ $labels.instance }}"
+                description: "Systemd unit {{ $labels.name }} on {{ $labels.instance }} is not in active or failed state for 5 minutes."
+
     ansible-automation:
       groups:
         - name: ansible-timer
