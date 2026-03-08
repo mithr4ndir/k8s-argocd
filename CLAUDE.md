@@ -88,7 +88,18 @@ k8s-argocd/
 - Renders into separate files (deployment.yaml, service.yaml, etc.)
 - Uses `nvidia` RuntimeClass for GPU access (RTX 2080 Ti NVENC transcoding)
 - nodeSelector: `nvidia.com/gpu: "true"` pins to k8cluster2
-- Config on NFS is vulnerable to corruption during pod restarts (Recreate strategy + NFS write truncation)
+- Kustomize patches extend Helm output (since chart doesn't support initContainers/lifecycle):
+  - `patch-encoding-init.yaml` — initContainer copies encoding.xml from ConfigMap to PVC
+  - `patch-graceful-shutdown.yaml` — preStop hook kills ffmpeg, 120s termination grace
+- When adding Kustomize patches, use `make render` (not `make all`) to avoid overwriting kustomization.yaml
+- `encoding-configmap.yaml` is manually managed (not Helm-generated), survives `make render`
+
+#### Jellyfin Operational Warnings
+- **NEVER restart/redeploy Jellyfin while a stream is active** — killing ffmpeg with open CUDA contexts causes Xid 45 GPU faults, requiring a full VM reboot to recover
+- **Config on NFS is vulnerable to corruption** during pod restarts (Recreate strategy + NFS write truncation). SQLite databases (users.db, library.db) cannot be in git — protected by ZFS snapshots on TrueNAS
+- **encoding.xml must be writable** — Jellyfin writes to it at startup. ConfigMap subPath mounts are read-only at filesystem level even without readOnly flag. Use initContainer copy pattern instead
+- **4K HEVC DV HDR transcoding** can cause CUDA_ERROR_OUT_OF_MEMORY on RTX 2080 Ti (11GB). Mitigations: disable enhanced NVDEC decoder, enable throttling, or lower client bitrate
+- **Client streaming bitrate** set too high (or "Auto") causes Jellyfin to remux (copy) instead of transcode, sending raw 40Mbps+ 4K over WAN which causes skipping. Set to 20Mbps for WAN clients
 
 ### Infrastructure components
 - MetalLB and NFS provisioner have `generate-crs` targets that create namespace + custom resource YAMLs

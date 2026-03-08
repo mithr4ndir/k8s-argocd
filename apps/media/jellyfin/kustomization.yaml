@@ -7,3 +7,4 @@ resources:
   - ingress.yaml
 patches:
   - path: patch-encoding-init.yaml
+  - path: patch-graceful-shutdown.yaml

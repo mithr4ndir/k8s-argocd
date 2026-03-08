@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin
+spec:
+  template:
+    spec:
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: jellyfin
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - killall -SIGTERM ffmpeg 2>/dev/null; sleep 10
