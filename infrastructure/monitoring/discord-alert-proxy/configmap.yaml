@@ -96,70 +96,67 @@ data:
     @app.post("/webhook")
     async def webhook(request: Request):
         payload = await request.json()
-        embeds = []
+        alerts = payload.get("alerts", [])
+        if not alerts:
+            return {"status": "ok"}
 
-        for alert in payload.get("alerts", []):
-            status = alert.get("status", "firing")
-            severity = alert.get("labels", {}).get("severity", "warning")
+        group_status = payload.get("status", "firing")
+        common = payload.get("commonLabels", {})
+        alertname = common.get("alertname", "Alert")
+        severity = common.get("severity", "warning")
 
-            if status == "resolved":
-                color = 65280
-                theme_msg = random.choice(RESOLVED_MESSAGES)
-            elif severity == "critical":
-                color = 16711680
-                theme_msg = random.choice(CRITICAL_MESSAGES)
-                art = random.choice(CRITICAL_ART)
-                theme_msg = f"{theme_msg}\n```\n{art}\n```"
-            else:
-                color = 16744448
-                theme_msg = random.choice(WARNING_MESSAGES)
+        if group_status == "resolved":
+            color = 65280
+            theme_msg = random.choice(RESOLVED_MESSAGES)
+            emoji = "\U0001f7e2"
+        elif severity == "critical":
+            color = 16711680
+            theme_msg = random.choice(CRITICAL_MESSAGES)
+            art = random.choice(CRITICAL_ART)
+            theme_msg = f"{theme_msg}\n```\n{art}\n```"
+            emoji = "\U0001f534"
+        else:
+            color = 16744448
+            theme_msg = random.choice(WARNING_MESSAGES)
+            emoji = "\U0001f7e0"
 
-            alertname = alert.get("labels", {}).get("alertname", "Unknown")
+        count = len(alerts)
+        title = f"{emoji} {group_status.upper()} ({count}) {alertname} [{severity}]"
+
+        lines = []
+        for alert in alerts:
+            summary = alert.get("annotations", {}).get("summary", "")
             instance = alert.get("labels", {}).get("instance", "")
-            summary = alert.get("annotations", {}).get("summary", alertname)
-            description = alert.get("annotations", {}).get("description", "")
+            if summary:
+                lines.append(f"\u2022 {summary}")
+            elif instance:
+                lines.append(f"\u2022 {instance}")
+        alert_list = "\n".join(lines)
 
-            if status == "resolved":
-                emoji = "\U0001f7e2"
-            elif severity == "critical":
-                emoji = "\U0001f534"
-            else:
-                emoji = "\U0001f7e0"
+        description = f"{theme_msg}\n\n{alert_list}"
 
-            title = f"{emoji} {status.upper()}: {summary}"
+        embed = {
+            "title": title[:256],
+            "description": description[:4096],
+            "color": color,
+        }
 
-            embed = {
-                "title": title[:256],
-                "description": f"{theme_msg}\n\n{description}"[:4096],
-                "color": color,
-                "fields": [],
-            }
-
-            if instance:
-                embed["fields"].append({"name": "Instance", "value": instance, "inline": True})
-            embed["fields"].append({"name": "Severity", "value": severity, "inline": True})
-            embed["fields"].append({"name": "Alert", "value": alertname, "inline": True})
-
-            embeds.append(embed)
-
-        for i in range(0, len(embeds), 10):
-            batch = embeds[i:i + 10]
+        resp = await request.app.state.client.post(
+            DISCORD_WEBHOOK_URL,
+            json={"embeds": [embed]},
+        )
+        if resp.status_code == 429:
+            retry_after = resp.json().get("retry_after", 1)
+            await asyncio.sleep(retry_after)
             resp = await request.app.state.client.post(
                 DISCORD_WEBHOOK_URL,
-                json={"embeds": batch},
+                json={"embeds": [embed]},
             )
-            if resp.status_code == 429:
-                retry_after = resp.json().get("retry_after", 1)
-                await asyncio.sleep(retry_after)
-                resp = await request.app.state.client.post(
-                    DISCORD_WEBHOOK_URL,
-                    json={"embeds": batch},
-                )
-            if resp.status_code >= 400:
-                return JSONResponse(
-                    status_code=502,
-                    content={"status": "error", "discord_status": resp.status_code},
-                )
+        if resp.status_code >= 400:
+            return JSONResponse(
+                status_code=502,
+                content={"status": "error", "discord_status": resp.status_code},
+            )
 
         return {"status": "ok"}
 
