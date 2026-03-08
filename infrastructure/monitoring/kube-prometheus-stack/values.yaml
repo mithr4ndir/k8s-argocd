@@ -225,14 +225,10 @@ kube-prometheus-stack:
               annotations:
                 summary: "{{ $labels.instance }} NFS mount read-only on {{ $labels.mountpoint }}"
                 description: "NFS mount {{ $labels.mountpoint }} on {{ $labels.instance }} is read-only, likely stale or TrueNAS unreachable."
-            - alert: NfsMountMissing
-              expr: absent_over_time(node_filesystem_avail_bytes{job="vm-node-exporter", instance=~"k8cluster.*", fstype="nfs4"}[10m])
-              for: 5m
-              labels:
-                severity: critical
-              annotations:
-                summary: "NFS mounts missing from K8s nodes"
-                description: "No NFS filesystem metrics from K8s nodes for 10 minutes. TrueNAS may be unreachable."
+            # NfsMountMissing removed: node_exporter reports device_error=1
+            # for all NFS mounts (normal behavior) and skips avail_bytes,
+            # causing absent_over_time to always fire. TrueNAS availability
+            # is covered by the NodeDown alert on 192.168.1.15:9100.
     prometheus-self:
       groups:
         - name: prometheus-health
@@ -286,8 +282,7 @@ kube-prometheus-stack:
               labels:
                 severity: warning
               annotations:
-                summary: "VM {{ $labels.name }} is down on {{ $labels.node }}"
-                description: "VM {{ $labels.name }} ({{ $labels.id }}) should be running (onboot=1) but has been stopped for 5 minutes."
+                summary: "{{ $labels.name }} ({{ $labels.id }})"
         - name: proxmox-resources
           rules:
             - alert: PveHighCpu
