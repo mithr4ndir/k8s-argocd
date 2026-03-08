@@ -347,6 +347,27 @@ kube-prometheus-stack:
                 summary: "{{ $labels.instance }} has {{ $value }} pending security updates"
                 description: "{{ $labels.instance }} has had pending security updates for over 24 hours."
 
+    ansible-automation:
+      groups:
+        - name: ansible-timer
+          rules:
+            - alert: AnsibleRunFailed
+              expr: ansible_run_success{job="vm-node-exporter"} == 0
+              for: 5m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Ansible timer run failed on {{ $labels.instance }}"
+                description: "The last ansible-proxmox timer run failed. Check logs at /var/log/ansible-quasarlab/."
+            - alert: AnsibleRunStale
+              expr: time() - ansible_run_timestamp_seconds{job="vm-node-exporter"} > 3600
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Ansible timer hasn't run in over 1 hour on {{ $labels.instance }}"
+                description: "Last ansible run was {{ $value | humanizeDuration }} ago. The systemd timer may be stopped or stuck."
+
   # Prometheus Operator
   prometheusOperator:
     enabled: true
