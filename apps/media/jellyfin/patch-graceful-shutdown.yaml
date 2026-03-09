@@ -14,4 +14,10 @@ spec:
                 command:
                   - sh
                   - -c
-                  - killall -SIGTERM ffmpeg 2>/dev/null; sleep 10
+                  - |
+                    killall -SIGTERM ffmpeg 2>/dev/null
+                    for i in $(seq 1 30); do
+                      pgrep -x ffmpeg > /dev/null || break
+                      sleep 2
+                    done
+                    sleep 5
