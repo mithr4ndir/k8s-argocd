@@ -1,7 +1,7 @@
 resources:
   - ../../infrastructure/metallb
   - ../../infrastructure/nfs
-  - ../../infrastructure/nvidia
+
   - ../../infrastructure/monitoring
   - ../../infrastructure/external-secrets
   - ../../infrastructure/reloader

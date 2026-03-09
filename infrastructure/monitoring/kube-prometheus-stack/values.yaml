@@ -62,6 +62,10 @@ kube-prometheus-stack:
               labels:
                 instance: npm
                 hypervisor: pve
+            - targets: ['192.168.1.170:9100']
+              labels:
+                instance: jellyfin
+                hypervisor: pve2
             # Bare-metal PVE hosts (not VMs)
             - targets: ['192.168.1.10:9100']
               labels:
