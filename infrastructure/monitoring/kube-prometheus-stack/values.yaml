@@ -384,8 +384,8 @@ kube-prometheus-stack:
               labels:
                 severity: warning
               annotations:
-                summary: "{{ $labels.playbook }} failed on {{ $labels.instance }}"
-                description: "Playbook {{ $labels.playbook }} failed on {{ $labels.instance }} ({{ $labels.target_address }}). Hosts: proxmox.yml→proxmox, monitoring.yml→all linux, grafana_config.yml→grafana. Check /var/log/ansible-quasarlab/."
+                summary: "{{ $labels.playbook }} failed — hosts: {{ $labels.failed_hosts }}"
+                description: "Playbook {{ $labels.playbook }} failed on hosts: {{ $labels.failed_hosts }}. Check /var/log/ansible-quasarlab/ on {{ $labels.instance }}."
             - alert: AnsibleRunStale
               expr: time() - ansible_run_timestamp_seconds{job="vm-node-exporter"} > 3600
               for: 10m
