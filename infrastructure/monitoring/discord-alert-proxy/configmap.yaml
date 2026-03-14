@@ -40,6 +40,16 @@ data:
         "\U0001f937 I am altering the deal. Pray I don't alter it any further. \u2014 Vader",
     ]
 
+    INFO_MESSAGES = [
+        "\U0001f9d9 The Ents are on the march! Something has changed in the forest...",
+        "\U0001f4dc One does not simply walk into production without making changes.",
+        "\U0001f527 I am altering the configuration. Pray I don't alter it any further. \u2014 Vader",
+        "\U0001f300 The ring of power has been moved... the configuration shifts.",
+        "\U0001f3af These aren't the configs you're looking for... wait, actually they are.",
+        "\U0001f985 The Eagles are coming! And they brought configuration changes.",
+        "\u2728 A wizard is never late, nor does he leave configs unchanged.",
+    ]
+
     RESOLVED_MESSAGES = [
         "\U0001f305 The Shire is safe once more. The hobbits can rest easy.",
         "\u2728 The light of E\u00e4rendil shines bright \u2014 the darkness has passed.",
@@ -107,6 +117,10 @@ data:
             art = random.choice(CRITICAL_ART)
             theme_msg = f"{theme_msg}\n```\n{art}\n```"
             emoji = "\U0001f534"
+        elif severity == "info":
+            color = 3447003
+            theme_msg = random.choice(INFO_MESSAGES)
+            emoji = "\U0001f535"
         else:
             color = 16744448
             theme_msg = random.choice(WARNING_MESSAGES)
