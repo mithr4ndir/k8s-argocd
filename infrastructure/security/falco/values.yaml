@@ -8,6 +8,8 @@ falco:
   rules:
     - disable:
         rule: "Contact K8S API Server From Container"
+    - disable:
+        rule: "Read sensitive file untrusted"
 
   falcosidekick:
     enabled: true
