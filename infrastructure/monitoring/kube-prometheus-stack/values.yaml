@@ -251,6 +251,22 @@ kube-prometheus-stack:
                 severity: warning
               annotations:
                 summary: "{{ $labels.name }} ({{ $labels.id }})"
+            - alert: PveQuorumDegraded
+              expr: pve_cluster_quorum_total_votes{job="vm-node-exporter"} < pve_cluster_quorum_expected_votes{job="vm-node-exporter"}
+              for: 2m
+              labels:
+                severity: warning
+              annotations:
+                summary: "PVE cluster quorum degraded on {{ $labels.instance }}"
+                description: "Cluster has {{ $value }} votes, expected {{ printf `pve_cluster_quorum_expected_votes{instance=\"%s\"}` $labels.instance | query | first | value }}. A node or qdevice may be down."
+            - alert: PveQuorumLost
+              expr: pve_cluster_quorum_quorate{job="vm-node-exporter"} == 0
+              for: 1m
+              labels:
+                severity: critical
+              annotations:
+                summary: "PVE cluster has LOST quorum on {{ $labels.instance }}"
+                description: "Cluster is no longer quorate. HA operations are blocked."
         - name: proxmox-resources
           rules:
             - alert: PveHighCpu
