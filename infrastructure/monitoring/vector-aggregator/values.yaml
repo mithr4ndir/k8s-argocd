@@ -1,0 +1,67 @@
+vector:
+  role: Aggregator
+
+  replicas: 1
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+  customConfig:
+    data_dir: /vector-data-dir
+
+    sources:
+      syslog:
+        type: syslog
+        address: 0.0.0.0:5514
+        mode: tcp
+
+      vector_agents:
+        type: vector
+        address: 0.0.0.0:6000
+
+    transforms:
+      syslog_remap:
+        type: remap
+        inputs:
+          - syslog
+        source: |
+          .job = "varlogs"
+          .host = .hostname ?? to_string!(.source_ip)
+          .log_type = "syslog"
+          del(.source_type)
+          del(.hostname)
+          del(.source_ip)
+          del(.facility)
+          del(.severity)
+
+      agent_passthrough:
+        type: remap
+        inputs:
+          - vector_agents
+        source: |
+          .job = .job ?? "varlogs"
+          .host = .host ?? "unknown"
+          .log_type = .log_type ?? "application"
+
+    sinks:
+      loki:
+        type: loki
+        inputs:
+          - syslog_remap
+          - agent_passthrough
+        endpoint: http://loki.monitoring.svc.cluster.local:3100
+        encoding:
+          codec: json
+        labels:
+          job: "{{ "{{job}}" }}"
+          host: "{{ "{{host}}" }}"
+          log_type: "{{ "{{log_type}}" }}"
+        remove_label_fields: true
+        out_of_order_action: accept
+
+  service:
+    enabled: false
