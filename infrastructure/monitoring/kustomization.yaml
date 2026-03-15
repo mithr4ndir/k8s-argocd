@@ -3,7 +3,6 @@ resources:
   - application.yaml
   - prometheus-external-svc.yaml
   - alertmanager-config.yaml
-  - elasticsearch-externalsecret.yaml
   - loki-external-svc.yaml
   - vector-aggregator-svc.yaml
   - discord-alert-proxy
