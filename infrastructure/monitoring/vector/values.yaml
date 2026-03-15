@@ -26,7 +26,7 @@ vector:
           .namespace = .kubernetes.pod_namespace
           .pod = .kubernetes.pod_name
           .container = .kubernetes.container_name
-          .app = .kubernetes.pod_labels."app.kubernetes.io/name" ?? .kubernetes.pod_labels.app ?? "unknown"
+          .app = to_string(.kubernetes.pod_labels."app.kubernetes.io/name") ?? to_string(.kubernetes.pod_labels.app) ?? "unknown"
           del(.kubernetes)
           del(.file)
           del(.source_type)
