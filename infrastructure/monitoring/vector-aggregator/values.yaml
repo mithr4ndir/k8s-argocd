@@ -57,9 +57,9 @@ vector:
         encoding:
           codec: json
         labels:
-          job: "{{job}}"
-          host: "{{host}}"
-          log_type: "{{log_type}}"
+          job: '{{ "{{job}}" }}'
+          host: '{{ "{{host}}" }}'
+          log_type: '{{ "{{log_type}}" }}'
         remove_label_fields: true
         out_of_order_action: accept
 
