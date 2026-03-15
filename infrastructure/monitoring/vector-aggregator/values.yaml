@@ -43,9 +43,9 @@ vector:
         inputs:
           - vector_agents
         source: |
-          .job = .job ?? "varlogs"
-          .host = .host ?? "unknown"
-          .log_type = .log_type ?? "application"
+          .job = to_string(.job) ?? "varlogs"
+          .host = to_string(.host) ?? "unknown"
+          .log_type = to_string(.log_type) ?? "application"
 
     sinks:
       loki:
