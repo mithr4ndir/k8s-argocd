@@ -40,10 +40,10 @@ vector:
         encoding:
           codec: json
         labels:
-          job: "{{ "{{job}}" }}"
-          namespace: "{{ "{{namespace}}" }}"
-          pod: "{{ "{{pod}}" }}"
-          container: "{{ "{{container}}" }}"
-          app: "{{ "{{app}}" }}"
+          job: "{{job}}"
+          namespace: "{{namespace}}"
+          pod: "{{pod}}"
+          container: "{{container}}"
+          app: "{{app}}"
         remove_label_fields: true
         out_of_order_action: accept
