@@ -104,6 +104,17 @@ k8s-argocd/
 - **4K HEVC DV HDR transcoding** can cause CUDA_ERROR_OUT_OF_MEMORY on RTX 2080 Ti (11GB). Mitigations: disable enhanced NVDEC decoder, enable throttling, or lower client bitrate
 - **Client streaming bitrate** set too high (or "Auto") causes Jellyfin to remux (copy) instead of transcode, sending raw 40Mbps+ 4K over WAN which causes skipping. Set to 20Mbps for WAN clients
 
+#### *Arr Apps Operational Warning (Sonarr, Radarr, Bazarr, Prowlarr, etc.)
+- **NEVER use `kubectl rollout restart`** on *arr apps — their SQLite config databases are on NFS PVCs. Even with `Recreate` strategy, rollout restart creates a new ReplicaSet that can briefly overlap, and NFS doesn't release file locks cleanly. This caused a full DB corruption (zeroed SQLite header) on 2026-03-15.
+- **To restart *arr pods safely**, scale down then up with a pause to let NFS flush:
+  ```bash
+  kubectl scale deploy <name> -n media --replicas=0 && sleep 5 && kubectl scale deploy <name> -n media --replicas=1
+  ```
+- *Arr apps have weekly automatic backups at `/config/Backups/scheduled/`. If corruption occurs, restore with:
+  ```bash
+  kubectl exec -n media deploy/<name> -- unzip -o /config/Backups/scheduled/<latest>.zip <name>.db -d /config/
+  ```
+
 ### Infrastructure components
 - MetalLB and NFS provisioner have `generate-crs` targets that create namespace + custom resource YAMLs
 - NFS provisioner makefile also has `inject-namespace` target
