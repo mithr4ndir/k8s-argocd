@@ -3,6 +3,7 @@ resources:
   - media-namespace.yaml
   - media-pv-nfs.yaml
   - media-pvc.yaml
+  - jellyfin-external-svc.yaml
   - nzbget/
   - qbittorrent/
   - radarr/
