@@ -5,39 +5,40 @@ falco:
   metrics:
     enabled: true
 
-  # Disable all rules, then enable only actionable threat detections.
-  # This avoids Discord alert flooding from benign K8s operations.
-  rules:
-    - disable:
-        rule: "*"
-    # Container compromise / reverse shells
-    - enable:
-        rule: "Drop and execute new binary in container"
-    - enable:
-        rule: "Netcat Remote Code Execution in Container"
-    - enable:
-        rule: "Redirect STDOUT/STDIN to Network Connection in Container"
-    - enable:
-        rule: "Execution from /dev/shm"
-    - enable:
-        rule: "Fileless execution via memfd_create"
-    # Container escapes / privilege escalation
-    - enable:
-        rule: "Detect release_agent File Container Escapes"
-    - enable:
-        rule: "Debugfs Launched in Privileged Container"
-    - enable:
-        rule: "Linux Kernel Module Injection Detected"
-    - enable:
-        rule: "PTRACE attached to process"
-    # Destructive actions
-    - enable:
-        rule: "Clear Log Activities"
-    - enable:
-        rule: "Remove Bulk Data from Disk"
-    # Interactive shell (useful signal in prod containers)
-    - enable:
-        rule: "Terminal shell in container"
+  # The "falco:" subsection maps to the Falco daemon config.
+  # "rules" here controls rule enable/disable at runtime.
+  falco:
+    rules:
+      - disable:
+          rule: "*"
+      # Container compromise / reverse shells
+      - enable:
+          rule: "Drop and execute new binary in container"
+      - enable:
+          rule: "Netcat Remote Code Execution in Container"
+      - enable:
+          rule: "Redirect STDOUT/STDIN to Network Connection in Container"
+      - enable:
+          rule: "Execution from /dev/shm"
+      - enable:
+          rule: "Fileless execution via memfd_create"
+      # Container escapes / privilege escalation
+      - enable:
+          rule: "Detect release_agent File Container Escapes"
+      - enable:
+          rule: "Debugfs Launched in Privileged Container"
+      - enable:
+          rule: "Linux Kernel Module Injection Detected"
+      - enable:
+          rule: "PTRACE attached to process"
+      # Destructive actions
+      - enable:
+          rule: "Clear Log Activities"
+      - enable:
+          rule: "Remove Bulk Data from Disk"
+      # Interactive shell in container
+      - enable:
+          rule: "Terminal shell in container"
 
   falcosidekick:
     enabled: true
