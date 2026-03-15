@@ -5,6 +5,10 @@ falco:
   metrics:
     enabled: true
 
+  rules:
+    - disable:
+        rule: "Contact K8S API Server From Container"
+
   falcosidekick:
     enabled: true
     config:
