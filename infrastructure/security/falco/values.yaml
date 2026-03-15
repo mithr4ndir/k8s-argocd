@@ -2,6 +2,9 @@ falco:
   driver:
     kind: modern_ebpf
 
+  metrics:
+    enabled: true
+
   falcosidekick:
     enabled: true
     config:
@@ -11,7 +14,9 @@ falco:
         expiresafter: 10m
 
   serviceMonitor:
-    enabled: true
+    create: true
+    labels:
+      release: kube-prometheus-stack
 
   resources:
     requests:
