@@ -8,6 +8,8 @@ trivy-operator:
 
   serviceMonitor:
     enabled: true
+    labels:
+      release: kube-prometheus-stack
 
   resources:
     requests:
