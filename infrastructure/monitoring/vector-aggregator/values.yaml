@@ -30,7 +30,7 @@ vector:
           - syslog
         source: |
           .job = "varlogs"
-          .host = .hostname ?? to_string!(.source_ip)
+          .host = to_string(.hostname) ?? to_string(.source_ip) ?? "unknown"
           .log_type = "syslog"
           del(.source_type)
           del(.hostname)
