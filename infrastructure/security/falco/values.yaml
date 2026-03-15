@@ -1,0 +1,21 @@
+falco:
+  driver:
+    kind: modern_ebpf
+
+  falcosidekick:
+    enabled: true
+    config:
+      alertmanager:
+        hostport: http://alertmanager-operated.monitoring.svc:9093
+        endpoint: /api/v2/alerts
+        expiresafter: 10m
+
+  serviceMonitor:
+    enabled: true
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi

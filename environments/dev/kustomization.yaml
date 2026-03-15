@@ -5,4 +5,5 @@ resources:
   - ../../infrastructure/monitoring
   - ../../infrastructure/external-secrets
   - ../../infrastructure/reloader
+  - ../../infrastructure/security
   - ../../apps/media
