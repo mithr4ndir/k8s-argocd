@@ -1,0 +1,17 @@
+trivy-operator:
+  trivy:
+    severity: CRITICAL,HIGH
+    ignoreUnfixed: true
+
+  operator:
+    scanJobsConcurrentLimit: 3
+
+  serviceMonitor:
+    enabled: true
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
