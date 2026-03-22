@@ -294,6 +294,43 @@ kube-prometheus-stack:
                 summary: "PVE storage {{ $labels.id }} > 85%"
                 description: "Proxmox storage {{ $labels.id }} is above 85% capacity."
 
+    wazuh-health:
+      groups:
+        - name: wazuh-services
+          rules:
+            - alert: WazuhManagerDown
+              expr: node_systemd_unit_state{job="vm-node-exporter", name="wazuh-manager.service", state="active"} == 0
+              for: 3m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Wazuh Manager is down on {{ $labels.instance }}"
+                description: "wazuh-manager.service is not active on {{ $labels.instance }} for 3 minutes. Security monitoring is offline."
+            - alert: WazuhIndexerDown
+              expr: node_systemd_unit_state{job="vm-node-exporter", name="wazuh-indexer.service", state="active"} == 0
+              for: 3m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Wazuh Indexer is down on {{ $labels.instance }}"
+                description: "wazuh-indexer.service is not active on {{ $labels.instance }}. Alert indexing is offline."
+            - alert: WazuhDashboardDown
+              expr: node_systemd_unit_state{job="vm-node-exporter", name="wazuh-dashboard.service", state="active"} == 0
+              for: 5m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Wazuh Dashboard is down on {{ $labels.instance }}"
+                description: "wazuh-dashboard.service is not active on {{ $labels.instance }}."
+            - alert: WazuhFilebeatDown
+              expr: node_systemd_unit_state{job="vm-node-exporter", name="filebeat.service", state="active"} == 0
+              for: 3m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Filebeat is down on {{ $labels.instance }}"
+                description: "filebeat.service is not active on {{ $labels.instance }}. Wazuh alerts are not being shipped to the indexer."
+
     system-updates:
       groups:
         - name: unattended-upgrades
@@ -372,6 +409,14 @@ kube-prometheus-stack:
               annotations:
                 summary: "{{ $labels.playbook }} changed {{ $value }} task(s) on {{ $labels.changed_hosts }}"
                 description: "Playbook {{ $labels.playbook }} made {{ $value }} change(s) on hosts: {{ $labels.changed_hosts }}. Check /var/log/ansible-quasarlab/ on {{ $labels.instance }}."
+            - alert: AnsibleSecurityRunStale
+              expr: time() - ansible_security_run_timestamp_seconds{job="vm-node-exporter"} > 3600
+              for: 10m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Security enforcement hasn't run in over 1 hour on {{ $labels.instance }}"
+                description: "Last security timer run was {{ $value | humanizeDuration }} ago on {{ $labels.instance }}. Wazuh/CrowdSec config enforcement is not converging."
 
   # Prometheus Operator
   prometheusOperator:
