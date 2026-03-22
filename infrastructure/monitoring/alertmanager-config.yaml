@@ -69,6 +69,12 @@ stringData:
           group_wait: 1m
           repeat_interval: 2h
         - matchers:
+            - source = "wazuh"
+          receiver: discord
+          group_by: [alertname, instance]
+          group_wait: 1m
+          repeat_interval: 2h
+        - matchers:
             - severity = critical
           receiver: discord
           repeat_interval: 1h
