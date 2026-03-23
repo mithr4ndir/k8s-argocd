@@ -1,6 +1,12 @@
 vector:
   role: Agent
 
+  service:
+    enabled: false
+
+  serviceHeadless:
+    enabled: false
+
   resources:
     requests:
       cpu: 50m
