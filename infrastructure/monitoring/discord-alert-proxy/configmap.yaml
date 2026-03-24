@@ -131,14 +131,60 @@ data:
 
         lines = []
         for alert in alerts:
-            summary = alert.get("annotations", {}).get("summary", "")
-            instance = alert.get("labels", {}).get("instance", "")
-            addr = alert.get("labels", {}).get("target_address", "")
-            label = summary or instance or "unknown"
-            if addr and addr != instance:
-                lines.append(f"\u2022 {label} (`{addr}`)")
-            else:
-                lines.append(f"\u2022 {label}")
+            labels = alert.get("labels", {})
+            annotations = alert.get("annotations", {})
+
+            # Prefer description over summary for specifics
+            desc = annotations.get("description", "")
+            summary = annotations.get("summary", "")
+            instance = labels.get("instance", "")
+            addr = labels.get("target_address", "")
+
+            # K8s context labels
+            ns = labels.get("namespace", "")
+            pod = labels.get("pod", "")
+            container = labels.get("container", "")
+            node = labels.get("node", "")
+            statefulset = labels.get("statefulset", "")
+            daemonset = labels.get("daemonset", "")
+            deployment = labels.get("deployment", "")
+            reason = labels.get("reason", "")
+            playbook = labels.get("playbook", "")
+            failed_hosts = labels.get("failed_hosts", "")
+            changed_hosts = labels.get("changed_hosts", "")
+
+            # Primary line: description has pod/ns detail, summary is generic
+            label = desc or summary or instance or "unknown"
+
+            # Context tags
+            ctx = []
+            if ns and pod:
+                ctx.append(f"`{ns}/{pod}`")
+                if container:
+                    ctx.append(f"container: `{container}`")
+            elif ns:
+                workload = statefulset or daemonset or deployment
+                if workload:
+                    ctx.append(f"`{ns}/{workload}`")
+                else:
+                    ctx.append(f"ns: `{ns}`")
+            if node:
+                ctx.append(f"node: `{node}`")
+            if reason:
+                ctx.append(f"reason: `{reason}`")
+            if playbook:
+                ctx.append(f"playbook: `{playbook}`")
+            if failed_hosts and failed_hosts != "none":
+                ctx.append(f"failed: `{failed_hosts}`")
+            if changed_hosts and changed_hosts != "none":
+                ctx.append(f"changed: `{changed_hosts}`")
+            if addr and addr != instance and not ctx:
+                ctx.append(f"`{addr}`")
+
+            line = f"\u2022 {label}"
+            if ctx:
+                line += f"\n  \u2514 " + " \u2502 ".join(ctx)
+            lines.append(line)
         alert_list = "\n".join(lines)
 
         description = f"{theme_msg}\n\n{alert_list}"
