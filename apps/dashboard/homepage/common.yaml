@@ -50,6 +50,28 @@ spec:
       securityContext:
         fsGroup: 1000
         fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+        - name: copy-config
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              cp /config-source/services.yaml /app/config/services.yaml
+              cp /config-source/settings.yaml /app/config/settings.yaml
+              cp /config-source/widgets.yaml /app/config/widgets.yaml
+              cp /config-source/bookmarks.yaml /app/config/bookmarks.yaml
+              cp /config-source/kubernetes.yaml /app/config/kubernetes.yaml
+              cp /config-source/docker.yaml /app/config/docker.yaml
+              cp /config-source/custom.css /app/config/custom.css
+              cp /config-source/custom.js /app/config/custom.js
+              chown -R 1000:1000 /app/config
+          volumeMounts:
+            - name: config-source
+              mountPath: /config-source
+              readOnly: true
+            - name: config
+              mountPath: /app/config
       containers:
         - name: main
           image: ghcr.io/gethomepage/homepage:latest
@@ -96,64 +118,11 @@ spec:
             seccompProfile:
               type: RuntimeDefault
           volumeMounts:
-            - name: config-services
-              mountPath: /app/config/services.yaml
-              subPath: services.yaml
-              readOnly: false
-            - name: config-settings
-              mountPath: /app/config/settings.yaml
-              subPath: settings.yaml
-              readOnly: false
-            - name: config-widgets
-              mountPath: /app/config/widgets.yaml
-              subPath: widgets.yaml
-              readOnly: false
-            - name: config-bookmarks
-              mountPath: /app/config/bookmarks.yaml
-              subPath: bookmarks.yaml
-              readOnly: false
-            - name: config-kubernetes
-              mountPath: /app/config/kubernetes.yaml
-              subPath: kubernetes.yaml
-              readOnly: false
-            - name: config-docker
-              mountPath: /app/config/docker.yaml
-              subPath: docker.yaml
-              readOnly: false
-            - name: config-css
-              mountPath: /app/config/custom.css
-              subPath: custom.css
-              readOnly: false
-            - name: config-js
-              mountPath: /app/config/custom.js
-              subPath: custom.js
-              readOnly: false
-            - name: logs
-              mountPath: /app/config/logs
+            - name: config
+              mountPath: /app/config
       volumes:
-        - name: config-services
+        - name: config-source
           configMap:
             name: homepage
-        - name: config-settings
-          configMap:
-            name: homepage
-        - name: config-widgets
-          configMap:
-            name: homepage
-        - name: config-bookmarks
-          configMap:
-            name: homepage
-        - name: config-kubernetes
-          configMap:
-            name: homepage
-        - name: config-docker
-          configMap:
-            name: homepage
-        - name: config-css
-          configMap:
-            name: homepage
-        - name: config-js
-          configMap:
-            name: homepage
-        - name: logs
+        - name: config
           emptyDir: {}
