@@ -1,0 +1,4 @@
+namespace: dashboard
+resources:
+  - dashboard-namespace.yaml
+  - homepage/

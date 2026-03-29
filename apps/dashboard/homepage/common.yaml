@@ -1,0 +1,155 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: homepage
+  namespace: dashboard
+  labels:
+    app.kubernetes.io/name: homepage
+    app.kubernetes.io/instance: homepage
+spec:
+  type: LoadBalancer
+  loadBalancerIP: 192.168.1.227
+  ports:
+    - port: 3000
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: homepage
+    app.kubernetes.io/instance: homepage
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homepage
+  namespace: dashboard
+  labels:
+    app.kubernetes.io/name: homepage
+    app.kubernetes.io/instance: homepage
+spec:
+  revisionHistoryLimit: 3
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: homepage
+      app.kubernetes.io/instance: homepage
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: homepage
+        app.kubernetes.io/instance: homepage
+      annotations:
+        reloader.stakater.com/auto: "true"
+    spec:
+      serviceAccountName: homepage
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: main
+          image: ghcr.io/gethomepage/homepage:latest
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: homepage-api-keys
+          env:
+            - name: HOMEPAGE_ALLOWED_HOSTS
+              value: "192.168.1.227,homepage.quasarlab.local,localhost"
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /api/healthcheck
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /api/healthcheck
+              port: 3000
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /api/healthcheck
+              port: 3000
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: config-services
+              mountPath: /app/config/services.yaml
+              subPath: services.yaml
+              readOnly: true
+            - name: config-settings
+              mountPath: /app/config/settings.yaml
+              subPath: settings.yaml
+              readOnly: true
+            - name: config-widgets
+              mountPath: /app/config/widgets.yaml
+              subPath: widgets.yaml
+              readOnly: true
+            - name: config-bookmarks
+              mountPath: /app/config/bookmarks.yaml
+              subPath: bookmarks.yaml
+              readOnly: true
+            - name: config-kubernetes
+              mountPath: /app/config/kubernetes.yaml
+              subPath: kubernetes.yaml
+              readOnly: true
+            - name: config-docker
+              mountPath: /app/config/docker.yaml
+              subPath: docker.yaml
+              readOnly: true
+            - name: config-css
+              mountPath: /app/config/custom.css
+              subPath: custom.css
+              readOnly: true
+            - name: config-js
+              mountPath: /app/config/custom.js
+              subPath: custom.js
+              readOnly: true
+            - name: logs
+              mountPath: /app/config/logs
+      volumes:
+        - name: config-services
+          configMap:
+            name: homepage
+        - name: config-settings
+          configMap:
+            name: homepage
+        - name: config-widgets
+          configMap:
+            name: homepage
+        - name: config-bookmarks
+          configMap:
+            name: homepage
+        - name: config-kubernetes
+          configMap:
+            name: homepage
+        - name: config-docker
+          configMap:
+            name: homepage
+        - name: config-css
+          configMap:
+            name: homepage
+        - name: config-js
+          configMap:
+            name: homepage
+        - name: logs
+          emptyDir: {}

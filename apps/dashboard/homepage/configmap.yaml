@@ -1,0 +1,238 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: homepage
+  namespace: dashboard
+  labels:
+    app.kubernetes.io/name: homepage
+data:
+  settings.yaml: |
+    title: QuasarLab
+    favicon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/proxmox.png
+    theme: dark
+    color: slate
+    headerStyle: clean
+    statusStyle: dot
+    hideVersion: true
+    layout:
+      Infrastructure:
+        style: row
+        columns: 4
+        icon: mdi-server-network
+      Media:
+        style: row
+        columns: 4
+        icon: mdi-filmstrip
+      Monitoring:
+        style: row
+        columns: 3
+        icon: mdi-chart-line
+      Management:
+        style: row
+        columns: 3
+        icon: mdi-cog
+
+  bookmarks.yaml: |
+    - Documentation:
+        - QuasarLab Runbooks:
+            - icon: mdi-book-open-variant
+              href: https://github.com/mithr4ndir/k8s-argocd/blob/main/docs/runbooks.md
+        - Ansible Runbooks:
+            - icon: mdi-ansible
+              href: https://github.com/mithr4ndir/ansible-quasarlab/blob/main/docs/runbooks.md
+    - Tools:
+        - ArgoCD Docs:
+            - icon: mdi-sync
+              href: https://argo-cd.readthedocs.io/
+        - Prometheus Docs:
+            - icon: si-prometheus
+              href: https://prometheus.io/docs/
+
+  services.yaml: |
+    - Infrastructure:
+        - Proxmox (pve):
+            icon: proxmox.png
+            href: https://192.168.1.10:8006
+            description: Primary node — 128 GB RAM
+            widget:
+              type: proxmox
+              url: https://192.168.1.10:8006
+              username: "{{HOMEPAGE_VAR_PROXMOX_TOKEN_ID}}"
+              password: "{{HOMEPAGE_VAR_PROXMOX_TOKEN_SECRET}}"
+              node: pve
+        - Proxmox (pve2):
+            icon: proxmox.png
+            href: https://192.168.1.11:8006
+            description: GPU node — RTX 2080 Ti
+            widget:
+              type: proxmox
+              url: https://192.168.1.11:8006
+              username: "{{HOMEPAGE_VAR_PROXMOX_TOKEN_ID}}"
+              password: "{{HOMEPAGE_VAR_PROXMOX_TOKEN_SECRET}}"
+              node: pve2
+        - TrueNAS SCALE:
+            icon: truenas.png
+            href: http://192.168.1.15
+            description: ZFS storage — 8x4TB RAID10
+            widget:
+              type: truenas
+              url: http://192.168.1.15
+              key: "{{HOMEPAGE_VAR_TRUENAS_KEY}}"
+        - pfSense:
+            icon: pfsense.png
+            href: https://192.168.1.1
+            description: Firewall & DNS
+            siteMonitor: https://192.168.1.1
+
+    - Media:
+        - Jellyfin:
+            icon: jellyfin.png
+            href: http://192.168.1.170:8096
+            description: Media server — GPU transcoding
+            widget:
+              type: jellyfin
+              url: http://192.168.1.170:8096
+              key: "{{HOMEPAGE_VAR_JELLYFIN_KEY}}"
+              version: 2
+              enableBlocks: true
+              enableNowPlaying: true
+        - Sonarr:
+            icon: sonarr.png
+            href: http://192.168.1.226:8989
+            description: TV show management
+            widget:
+              type: sonarr
+              url: http://192.168.1.226:8989
+              key: "{{HOMEPAGE_VAR_SONARR_KEY}}"
+              enableQueue: true
+        - Radarr:
+            icon: radarr.png
+            href: http://192.168.1.226:7878
+            description: Movie management
+            widget:
+              type: radarr
+              url: http://192.168.1.226:7878
+              key: "{{HOMEPAGE_VAR_RADARR_KEY}}"
+              enableQueue: true
+        - Prowlarr:
+            icon: prowlarr.png
+            href: http://192.168.1.226:9696
+            description: Indexer management
+            widget:
+              type: prowlarr
+              url: http://192.168.1.226:9696
+              key: "{{HOMEPAGE_VAR_PROWLARR_KEY}}"
+        - Bazarr:
+            icon: bazarr.png
+            href: http://192.168.1.226:6767
+            description: Subtitle management
+            widget:
+              type: bazarr
+              url: http://192.168.1.226:6767
+              key: "{{HOMEPAGE_VAR_BAZARR_KEY}}"
+        - Jellyseerr:
+            icon: jellyseerr.png
+            href: http://192.168.1.226:5055
+            description: Media requests
+            widget:
+              type: jellyseerr
+              url: http://192.168.1.226:5055
+              key: "{{HOMEPAGE_VAR_JELLYSEERR_KEY}}"
+        - NZBGet:
+            icon: nzbget.png
+            href: http://192.168.1.226:10057
+            description: Usenet downloader
+            widget:
+              type: nzbget
+              url: http://192.168.1.226:10057
+        - qBittorrent:
+            icon: qbittorrent.png
+            href: http://192.168.1.226:8080
+            description: Torrent client
+            widget:
+              type: qbittorrent
+              url: http://192.168.1.226:8080
+
+    - Monitoring:
+        - Grafana:
+            icon: grafana.png
+            href: http://192.168.1.121:3000
+            description: Dashboards & visualization
+            widget:
+              type: grafana
+              url: http://192.168.1.121:3000
+              username: "{{HOMEPAGE_VAR_GRAFANA_USER}}"
+              password: "{{HOMEPAGE_VAR_GRAFANA_PASS}}"
+        - Prometheus:
+            icon: prometheus.png
+            href: http://192.168.1.230:9090
+            description: Metrics & alerting
+            widget:
+              type: prometheus
+              url: http://192.168.1.230:9090
+        - Wazuh:
+            icon: wazuh.png
+            href: https://192.168.1.171:5601
+            description: SIEM — 13 agents
+            siteMonitor: https://192.168.1.171:5601
+        - Alertmanager:
+            icon: alertmanager.png
+            href: http://192.168.1.230:9093
+            description: Alert routing to Discord
+
+    - Management:
+        - Nginx Proxy Manager:
+            icon: nginx-proxy-manager.png
+            href: http://192.168.1.150:81
+            description: Reverse proxy & certs
+            widget:
+              type: npm
+              url: http://192.168.1.150:81
+              username: "{{HOMEPAGE_VAR_NPM_USER}}"
+              password: "{{HOMEPAGE_VAR_NPM_PASS}}"
+        - ArgoCD:
+            icon: argocd.png
+            href: https://argocd.quasarlab.local
+            description: GitOps deployments
+        - Command Center:
+            icon: mdi-console
+            href: http://192.168.1.88
+            description: Ansible control node
+
+  widgets.yaml: |
+    - logo:
+        icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/proxmox.png
+    - greeting:
+        text_size: xl
+        text: QuasarLab
+    - kubernetes:
+        cluster:
+          show: true
+          cpu: true
+          memory: true
+          showLabel: true
+          label: K8s Cluster
+        nodes:
+          show: true
+          cpu: true
+          memory: true
+          showLabel: true
+    - openmeteo:
+        label: Weather
+        units: imperial
+        cache: 5
+    - datetime:
+        text_size: l
+        format:
+          dateStyle: long
+          timeStyle: short
+          hourCycle: h12
+
+  kubernetes.yaml: |
+    mode: cluster
+
+  docker.yaml: |
+    # not used — all services are on K8s or VMs
+
+  custom.css: ""
+  custom.js: ""
