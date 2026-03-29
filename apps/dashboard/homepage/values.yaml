@@ -69,7 +69,7 @@ persistence:
     globalMounts:
       - path: /app/config/services.yaml
         subPath: services.yaml
-        readOnly: true
+        readOnly: false
   config-settings:
     enabled: true
     type: configMap
@@ -77,7 +77,7 @@ persistence:
     globalMounts:
       - path: /app/config/settings.yaml
         subPath: settings.yaml
-        readOnly: true
+        readOnly: false
   config-widgets:
     enabled: true
     type: configMap
@@ -85,7 +85,7 @@ persistence:
     globalMounts:
       - path: /app/config/widgets.yaml
         subPath: widgets.yaml
-        readOnly: true
+        readOnly: false
   config-bookmarks:
     enabled: true
     type: configMap
@@ -93,7 +93,7 @@ persistence:
     globalMounts:
       - path: /app/config/bookmarks.yaml
         subPath: bookmarks.yaml
-        readOnly: true
+        readOnly: false
   config-kubernetes:
     enabled: true
     type: configMap
@@ -101,7 +101,7 @@ persistence:
     globalMounts:
       - path: /app/config/kubernetes.yaml
         subPath: kubernetes.yaml
-        readOnly: true
+        readOnly: false
   config-docker:
     enabled: true
     type: configMap
@@ -109,7 +109,7 @@ persistence:
     globalMounts:
       - path: /app/config/docker.yaml
         subPath: docker.yaml
-        readOnly: true
+        readOnly: false
   config-css:
     enabled: true
     type: configMap
@@ -117,7 +117,7 @@ persistence:
     globalMounts:
       - path: /app/config/custom.css
         subPath: custom.css
-        readOnly: true
+        readOnly: false
   config-js:
     enabled: true
     type: configMap
@@ -125,7 +125,7 @@ persistence:
     globalMounts:
       - path: /app/config/custom.js
         subPath: custom.js
-        readOnly: true
+        readOnly: false
   logs:
     enabled: true
     type: emptyDir

@@ -99,35 +99,35 @@ spec:
             - name: config-services
               mountPath: /app/config/services.yaml
               subPath: services.yaml
-              readOnly: true
+              readOnly: false
             - name: config-settings
               mountPath: /app/config/settings.yaml
               subPath: settings.yaml
-              readOnly: true
+              readOnly: false
             - name: config-widgets
               mountPath: /app/config/widgets.yaml
               subPath: widgets.yaml
-              readOnly: true
+              readOnly: false
             - name: config-bookmarks
               mountPath: /app/config/bookmarks.yaml
               subPath: bookmarks.yaml
-              readOnly: true
+              readOnly: false
             - name: config-kubernetes
               mountPath: /app/config/kubernetes.yaml
               subPath: kubernetes.yaml
-              readOnly: true
+              readOnly: false
             - name: config-docker
               mountPath: /app/config/docker.yaml
               subPath: docker.yaml
-              readOnly: true
+              readOnly: false
             - name: config-css
               mountPath: /app/config/custom.css
               subPath: custom.css
-              readOnly: true
+              readOnly: false
             - name: config-js
               mountPath: /app/config/custom.js
               subPath: custom.js
-              readOnly: true
+              readOnly: false
             - name: logs
               mountPath: /app/config/logs
       volumes:
