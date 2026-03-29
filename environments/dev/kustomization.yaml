@@ -7,3 +7,4 @@ resources:
   - ../../infrastructure/reloader
   - ../../infrastructure/security
   - ../../apps/media
+  - ../../apps/dashboard
