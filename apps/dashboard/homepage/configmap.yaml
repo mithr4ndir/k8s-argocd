@@ -170,7 +170,7 @@ data:
             icon: wazuh.png
             href: https://192.168.1.171:5601
             description: SIEM — 13 agents
-            siteMonitor: https://192.168.1.171:5601
+            siteMonitor: http://192.168.1.171:5601
         - Alertmanager:
             icon: alertmanager.png
             href: http://192.168.1.230:9093
