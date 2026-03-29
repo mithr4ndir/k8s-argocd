@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/instance: homepage
 spec:
   type: LoadBalancer
-  loadBalancerIP: 192.168.1.227
+  loadBalancerIP: 192.168.1.228
   ports:
     - port: 3000
       targetPort: http
@@ -63,7 +63,7 @@ spec:
                 fieldRef:
                   fieldPath: status.podIP
             - name: HOMEPAGE_ALLOWED_HOSTS
-              value: "$(MY_POD_IP):3000,192.168.1.227:3000,192.168.1.227,homepage.quasarlab.local,localhost"
+              value: "$(MY_POD_IP):3000,192.168.1.228:3000,192.168.1.228,homepage.quasarlab.local,localhost"
           ports:
             - name: http
               containerPort: 3000
