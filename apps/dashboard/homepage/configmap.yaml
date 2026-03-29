@@ -142,16 +142,12 @@ data:
             icon: nzbget.png
             href: http://192.168.1.226:10057
             description: Usenet downloader
-            widget:
-              type: nzbget
-              url: http://192.168.1.226:10057
+            siteMonitor: http://192.168.1.226:10057
         - qBittorrent:
             icon: qbittorrent.png
             href: http://192.168.1.226:8080
             description: Torrent client
-            widget:
-              type: qbittorrent
-              url: http://192.168.1.226:8080
+            siteMonitor: http://192.168.1.226:8080
 
     - Monitoring:
         - Grafana:
