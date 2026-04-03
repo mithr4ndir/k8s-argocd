@@ -402,13 +402,13 @@ kube-prometheus-stack:
                 summary: "Ansible timer hasn't run in over 1 hour on {{ $labels.instance }}"
                 description: "Last ansible run was {{ $value | humanizeDuration }} ago on {{ $labels.instance }} ({{ $labels.target_address }}). The systemd timer may be stopped or stuck."
             - alert: AnsiblePlaybookMadeChanges
-              expr: ansible_playbook_changed_tasks{job="vm-node-exporter"} > 0
-              for: 0m
+              expr: sum by (playbook) (ansible_playbook_changed_tasks{job="vm-node-exporter"}) > 0
+              for: 5m
               labels:
                 severity: info
               annotations:
-                summary: "{{ $labels.playbook }} changed {{ $value }} task(s) on {{ $labels.changed_hosts }}"
-                description: "Playbook {{ $labels.playbook }} made {{ $value }} change(s) on hosts: {{ $labels.changed_hosts }}. Check /var/log/ansible-quasarlab/ on {{ $labels.instance }}."
+                summary: "{{ $labels.playbook }} made changes"
+                description: "Playbook {{ $labels.playbook }} has had changed tasks for over 5 minutes. Check /var/log/ansible-quasarlab/ for details."
             - alert: AnsibleSecurityRunStale
               expr: time() - ansible_security_run_timestamp_seconds{job="vm-node-exporter"} > 3600
               for: 10m
