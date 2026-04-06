@@ -1,0 +1,10 @@
+---
+apiVersion: kubernetes.dask.org/v1
+kind: DaskAutoscaler
+metadata:
+  name: lsdb-autoscaler
+  namespace: science
+spec:
+  cluster: lsdb-cluster
+  minimum: 1
+  maximum: 6
