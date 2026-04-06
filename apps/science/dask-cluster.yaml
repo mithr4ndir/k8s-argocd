@@ -5,6 +5,7 @@ metadata:
   namespace: science
   annotations:
     argocd.argoproj.io/sync-wave: '2'
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   worker:
     replicas: 1
