@@ -1,0 +1,8 @@
+resources:
+  - namespace.yaml
+  - resource-quota.yaml
+  - application.yaml
+  - hats-catalogs-pvc.yaml
+  - dask-cluster.yaml
+  - dask-autoscaler.yaml
+  - ingress.yaml

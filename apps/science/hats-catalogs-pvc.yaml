@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hats-catalogs
+  namespace: science
+  labels:
+    app: science
+spec:
+  storageClassName: k8s-nfs
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
