@@ -1,0 +1,296 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-security-falco
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: "Security"
+data:
+  falco.json: |
+    {
+      "uid": "falco-events",
+      "title": "Falco Runtime Security",
+      "tags": ["security", "falco", "runtime"],
+      "timezone": "browser",
+      "refresh": "1m",
+      "time": {
+        "from": "now-6h",
+        "to": "now"
+      },
+      "schemaVersion": 39,
+      "version": 1,
+      "id": null,
+      "templating": {
+        "list": [
+          {
+            "current": {
+              "selected": false,
+              "text": "Prometheus-K8s",
+              "value": "Prometheus-K8s"
+            },
+            "hide": 0,
+            "includeAll": false,
+            "multi": false,
+            "name": "datasource",
+            "options": [],
+            "query": "prometheus",
+            "queryValue": "",
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "type": "datasource"
+          }
+        ]
+      },
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": {
+              "type": "grafana",
+              "uid": "-- Grafana --"
+            },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "panels": [
+        {
+          "type": "row",
+          "title": "Overview",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "collapsed": false
+        },
+        {
+          "type": "stat",
+          "title": "Falco Events (Total)",
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "sum(increase(falcosecurity_falco_rules_matches_total{}[1h]))",
+              "legendFormat": "Events/1h"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 10 },
+                  { "color": "red", "value": 100 }
+                ]
+              },
+              "color": { "mode": "thresholds" }
+            }
+          },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "colorMode": "background"
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Critical Priority",
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "sum(increase(falcosecurity_falco_rules_matches_total{priority=~\"0|1|2\"}[1h])) or vector(0)",
+              "legendFormat": "Critical+/1h"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "red", "value": 1 }
+                ]
+              },
+              "color": { "mode": "thresholds" }
+            }
+          },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "colorMode": "background"
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Warning Priority",
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "sum(increase(falcosecurity_falco_rules_matches_total{priority=\"4\"}[1h])) or vector(0)",
+              "legendFormat": "Warning/1h"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "orange", "value": 1 }
+                ]
+              },
+              "color": { "mode": "thresholds" }
+            }
+          },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "colorMode": "background"
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Notice/Info Priority",
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "sum(increase(falcosecurity_falco_rules_matches_total{priority=~\"5|6\"}[1h])) or vector(0)",
+              "legendFormat": "Notice+Info/1h"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "blue", "value": 1 }
+                ]
+              },
+              "color": { "mode": "thresholds" }
+            }
+          },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "colorMode": "background"
+          }
+        },
+        {
+          "type": "row",
+          "title": "Event Trends",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+          "collapsed": false
+        },
+        {
+          "type": "timeseries",
+          "title": "Events by Priority",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "sum by (priority) (rate(falcosecurity_falco_rules_matches_total{}[5m]))",
+              "legendFormat": "priority={{priority}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 80,
+                "stacking": { "mode": "normal" }
+              }
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Events by Rule",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "topk(10, sum by (rule_name) (rate(falcosecurity_falco_rules_matches_total{}[5m])))",
+              "legendFormat": "{{rule_name}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 80,
+                "stacking": { "mode": "normal" }
+              }
+            }
+          }
+        },
+        {
+          "type": "row",
+          "title": "Top Rules",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+          "collapsed": false
+        },
+        {
+          "type": "table",
+          "title": "Top 20 Rules (Last 24h)",
+          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 15 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "topk(20, sum by (rule_name, priority, source) (increase(falcosecurity_falco_rules_matches_total{}[24h])))",
+              "legendFormat": "",
+              "format": "table",
+              "instant": true
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": { "Time": true, "__name__": true },
+                "renameByName": {
+                  "rule_name": "Rule",
+                  "priority": "Priority",
+                  "source": "Source",
+                  "Value": "Count (24h)"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [{ "field": "Count (24h)", "desc": true }]
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Priority" },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      { "type": "value", "options": { "0": { "text": "Emergency", "color": "dark-red" } } },
+                      { "type": "value", "options": { "1": { "text": "Alert", "color": "red" } } },
+                      { "type": "value", "options": { "2": { "text": "Critical", "color": "red" } } },
+                      { "type": "value", "options": { "3": { "text": "Error", "color": "orange" } } },
+                      { "type": "value", "options": { "4": { "text": "Warning", "color": "yellow" } } },
+                      { "type": "value", "options": { "5": { "text": "Notice", "color": "blue" } } },
+                      { "type": "value", "options": { "6": { "text": "Info", "color": "green" } } },
+                      { "type": "value", "options": { "7": { "text": "Debug", "color": "text" } } }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
