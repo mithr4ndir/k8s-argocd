@@ -1,0 +1,6 @@
+dependencies:
+- name: dask-kubernetes-operator
+  repository: https://helm.dask.org
+  version: 2026.3.0
+digest: sha256:511327a26df74dd9b3314658614b8d214e656ad1cf49de735ae9fcc77c967cb9
+generated: "2026-04-06T01:01:50.15015485Z"

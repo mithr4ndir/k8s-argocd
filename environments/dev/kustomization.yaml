@@ -8,3 +8,4 @@ resources:
   - ../../infrastructure/security
   - ../../apps/media
   - ../../apps/dashboard
+  - ../../apps/science
