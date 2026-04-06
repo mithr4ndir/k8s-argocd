@@ -1,0 +1,57 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: dask-alerts
+  namespace: science
+  labels:
+    release: kube-prometheus-stack
+    app.kubernetes.io/name: dask-alerts
+    app.kubernetes.io/part-of: lsdb-cluster
+spec:
+  groups:
+    - name: dask-availability
+      rules:
+        - alert: DaskSchedulerDown
+          expr: absent(up{job="dask-scheduler"} == 1)
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Dask scheduler is down"
+            description: "The Dask scheduler (lsdb-cluster) has been unreachable for 5 minutes. No computations can be submitted."
+        - alert: DaskNoWorkers
+          expr: dask_scheduler_workers == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Dask cluster has no workers"
+            description: "The Dask cluster (lsdb-cluster) has had 0 workers for 5 minutes. Submitted tasks cannot execute."
+    - name: dask-resources
+      rules:
+        - alert: DaskWorkerOOM
+          expr: |
+            (
+              container_memory_working_set_bytes{namespace="science", container="worker"}
+              / on(pod, namespace) group_left()
+              kube_pod_container_resource_limits{namespace="science", container="worker", resource="memory"}
+            ) > 0.9
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Dask worker {{ $labels.pod }} memory > 90%"
+            description: "Dask worker {{ $labels.pod }} is using {{ $value | humanizePercentage }} of its memory limit. OOM kill is imminent."
+        - alert: DaskHighTaskFailureRate
+          expr: |
+            (
+              rate(dask_scheduler_tasks_forgotten_total[5m])
+              / (rate(dask_scheduler_tasks_forgotten_total[5m]) + rate(dask_scheduler_tasks_total[5m]) + 1e-10)
+            ) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Dask task failure rate > 10%"
+            description: "More than 10% of Dask tasks are being forgotten/erred over the last 5 minutes (current: {{ $value | humanizePercentage }})."

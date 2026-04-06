@@ -1,9 +1,10 @@
----
 apiVersion: kubernetes.dask.org/v1
 kind: DaskAutoscaler
 metadata:
   name: lsdb-autoscaler
   namespace: science
+  annotations:
+    argocd.argoproj.io/sync-wave: '2'
 spec:
   cluster: lsdb-cluster
   minimum: 1

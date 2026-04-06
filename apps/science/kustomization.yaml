@@ -6,3 +6,6 @@ resources:
   - dask-cluster.yaml
   - dask-autoscaler.yaml
   - ingress.yaml
+  - servicemonitor.yaml
+  - prometheus-rules.yaml
+  - grafana-dashboard.yaml
