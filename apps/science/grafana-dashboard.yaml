@@ -1,0 +1,157 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dask-grafana-dashboard
+  namespace: science
+  labels:
+    app.kubernetes.io/name: dask-dashboard
+    app.kubernetes.io/part-of: lsdb-cluster
+  annotations:
+    grafana.quasarlab.local/provision: "true"
+data:
+  dask-cluster-overview.json: |
+    {
+      "annotations": {
+        "list": []
+      },
+      "description": "Dask LSDB Cluster - Scheduler and Worker Observability",
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "links": [],
+      "panels": [
+        {
+          "title": "Worker Count",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "fillOpacity": 10, "lineWidth": 2, "showPoints": "never" },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "targets": [
+            { "expr": "dask_scheduler_workers{job=\"dask-scheduler\"}", "legendFormat": "Current Workers", "refId": "A" },
+            { "expr": "kube_deployment_spec_replicas{namespace=\"science\", deployment=~\".*dask.*worker.*\"}", "legendFormat": "Desired Workers", "refId": "B" }
+          ]
+        },
+        {
+          "title": "Scheduler Memory Usage",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "fillOpacity": 10, "lineWidth": 2, "showPoints": "never" },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "targets": [
+            { "expr": "container_memory_working_set_bytes{namespace=\"science\", pod=~\"lsdb-cluster-scheduler.*\", container=\"scheduler\"}", "legendFormat": "Working Set", "refId": "A" },
+            { "expr": "kube_pod_container_resource_limits{namespace=\"science\", pod=~\"lsdb-cluster-scheduler.*\", container=\"scheduler\", resource=\"memory\"}", "legendFormat": "Limit", "refId": "B" },
+            { "expr": "kube_pod_container_resource_requests{namespace=\"science\", pod=~\"lsdb-cluster-scheduler.*\", container=\"scheduler\", resource=\"memory\"}", "legendFormat": "Request", "refId": "C" }
+          ]
+        },
+        {
+          "title": "Worker Memory Usage per Pod",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "fillOpacity": 10, "lineWidth": 2, "showPoints": "never" },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "targets": [
+            { "expr": "container_memory_working_set_bytes{namespace=\"science\", pod=~\"lsdb-cluster-worker.*\", container=\"worker\"}", "legendFormat": "{{ pod }}", "refId": "A" },
+            { "expr": "kube_pod_container_resource_limits{namespace=\"science\", pod=~\"lsdb-cluster-worker.*\", container=\"worker\", resource=\"memory\"}", "legendFormat": "Limit", "refId": "B" }
+          ]
+        },
+        {
+          "title": "Task Throughput",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "fillOpacity": 10, "lineWidth": 2, "showPoints": "never" },
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "targets": [
+            { "expr": "rate(dask_scheduler_tasks_total{job=\"dask-scheduler\"}[5m])", "legendFormat": "Tasks Completed/s", "refId": "A" },
+            { "expr": "rate(dask_scheduler_tasks_forgotten_total{job=\"dask-scheduler\"}[5m])", "legendFormat": "Tasks Forgotten/s", "refId": "B" }
+          ]
+        },
+        {
+          "title": "Task State Distribution",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "fillOpacity": 30, "lineWidth": 1, "showPoints": "never", "stacking": { "mode": "normal" } },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "targets": [
+            { "expr": "dask_scheduler_tasks{job=\"dask-scheduler\", state=\"waiting\"}", "legendFormat": "Waiting", "refId": "A" },
+            { "expr": "dask_scheduler_tasks{job=\"dask-scheduler\", state=\"processing\"}", "legendFormat": "Processing", "refId": "B" },
+            { "expr": "dask_scheduler_tasks{job=\"dask-scheduler\", state=\"memory\"}", "legendFormat": "In Memory", "refId": "C" },
+            { "expr": "dask_scheduler_tasks{job=\"dask-scheduler\", state=\"erred\"}", "legendFormat": "Erred", "refId": "D" }
+          ]
+        },
+        {
+          "title": "Dask Cluster CPU Usage",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "fillOpacity": 10, "lineWidth": 2, "showPoints": "never" },
+              "unit": "short",
+              "min": 0
+            },
+            "overrides": []
+          },
+          "targets": [
+            { "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"science\", pod=~\"lsdb-cluster-.*\", container=~\"scheduler|worker\"}[5m])) by (container)", "legendFormat": "{{ container }}", "refId": "A" },
+            { "expr": "sum(kube_pod_container_resource_limits{namespace=\"science\", pod=~\"lsdb-cluster-.*\", container=~\"scheduler|worker\", resource=\"cpu\"}) by (container)", "legendFormat": "{{ container }} limit", "refId": "B" }
+          ]
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["dask", "science", "lsdb"],
+      "templating": {
+        "list": [
+          {
+            "current": {},
+            "hide": 0,
+            "includeAll": false,
+            "name": "DS_PROMETHEUS",
+            "query": "prometheus",
+            "type": "datasource"
+          }
+        ]
+      },
+      "time": { "from": "now-1h", "to": "now" },
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "Dask LSDB Cluster",
+      "uid": "dask-lsdb-cluster",
+      "version": 1
+    }
