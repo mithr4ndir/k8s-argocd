@@ -1,0 +1,179 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-vms-loki-logs
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: "VMs"
+data:
+  loki-logs.json: |
+    {
+      "annotations": {
+        "list": []
+      },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [],
+      "panels": [
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "id": 1,
+          "title": "Overview",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "loki", "uid": "${datasource}" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisLabel": "",
+                "barAlignment": 0,
+                "drawStyle": "bars",
+                "fillOpacity": 50,
+                "gradientMode": "none",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "showPoints": "never",
+                "stacking": { "group": "A", "mode": "normal" }
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 6, "w": 24, "x": 0, "y": 1 },
+          "id": 2,
+          "options": {
+            "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "loki", "uid": "${datasource}" },
+              "expr": "sum by (host) (count_over_time({job=\"varlogs\", host=~\"$host\", log_type=~\"$log_type\", app=~\"$app\"} [$__interval]))",
+              "legendFormat": "{{host}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Log Volume by Host",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 },
+          "id": 3,
+          "title": "Logs",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "loki", "uid": "${datasource}" },
+          "gridPos": { "h": 20, "w": 24, "x": 0, "y": 8 },
+          "id": 4,
+          "options": {
+            "dedupStrategy": "none",
+            "enableLogDetails": true,
+            "prettifyLogMessage": false,
+            "showCommonLabels": false,
+            "showLabels": true,
+            "showTime": true,
+            "sortOrder": "Descending",
+            "wrapLogMessage": false
+          },
+          "targets": [
+            {
+              "datasource": { "type": "loki", "uid": "${datasource}" },
+              "expr": "{job=\"varlogs\", host=~\"$host\", log_type=~\"$log_type\", app=~\"$app\"} |= `$search` | json | line_format `{{.message}}`",
+              "refId": "A"
+            }
+          ],
+          "title": "VM Logs",
+          "type": "logs"
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["logs", "vms", "loki"],
+      "templating": {
+        "list": [
+          {
+            "current": { "text": "Loki", "value": "Loki" },
+            "hide": 0,
+            "includeAll": false,
+            "label": "Datasource",
+            "multi": false,
+            "name": "datasource",
+            "options": [],
+            "query": "loki",
+            "refresh": 1,
+            "type": "datasource"
+          },
+          {
+            "allValue": ".*",
+            "current": { "text": "All", "value": "$__all" },
+            "datasource": { "type": "loki", "uid": "${datasource}" },
+            "definition": "label_values({job=\"varlogs\"}, host)",
+            "hide": 0,
+            "includeAll": true,
+            "label": "Host",
+            "multi": true,
+            "name": "host",
+            "query": "label_values({job=\"varlogs\"}, host)",
+            "refresh": 2,
+            "sort": 1,
+            "type": "query"
+          },
+          {
+            "allValue": ".*",
+            "current": { "text": "All", "value": "$__all" },
+            "datasource": { "type": "loki", "uid": "${datasource}" },
+            "definition": "label_values({job=\"varlogs\"}, log_type)",
+            "hide": 0,
+            "includeAll": true,
+            "label": "Log Type",
+            "multi": true,
+            "name": "log_type",
+            "query": "label_values({job=\"varlogs\"}, log_type)",
+            "refresh": 2,
+            "sort": 1,
+            "type": "query"
+          },
+          {
+            "allValue": ".*",
+            "current": { "text": "All", "value": "$__all" },
+            "datasource": { "type": "loki", "uid": "${datasource}" },
+            "definition": "label_values({job=\"varlogs\", host=~\"$host\"}, app)",
+            "hide": 0,
+            "includeAll": true,
+            "label": "App",
+            "multi": true,
+            "name": "app",
+            "query": "label_values({job=\"varlogs\", host=~\"$host\"}, app)",
+            "refresh": 2,
+            "sort": 1,
+            "type": "query"
+          },
+          {
+            "current": { "text": "", "value": "" },
+            "hide": 0,
+            "label": "Search",
+            "name": "search",
+            "options": [{ "selected": true, "text": "", "value": "" }],
+            "query": "",
+            "type": "textbox"
+          }
+        ]
+      },
+      "time": { "from": "now-1h", "to": "now" },
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "VM Log Explorer",
+      "uid": "vm-log-explorer",
+      "version": 1
+    }
