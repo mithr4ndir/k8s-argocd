@@ -1,0 +1,1425 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-vms-jellyfin
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: "VMs"
+data:
+  jellyfin.json: |
+    {
+      "uid": "jellyfin",
+      "title": "Jellyfin Media Server",
+      "tags": ["jellyfin", "media", "gpu"],
+      "timezone": "browser",
+      "refresh": "30s",
+      "time": {
+        "from": "now-6h",
+        "to": "now"
+      },
+      "schemaVersion": 39,
+      "version": 1,
+      "templating": {
+        "list": [
+          {
+            "current": {
+              "selected": false,
+              "text": "Prometheus-K8s",
+              "value": "Prometheus-K8s"
+            },
+            "hide": 0,
+            "includeAll": false,
+            "multi": false,
+            "name": "datasource",
+            "options": [],
+            "query": "prometheus",
+            "queryValue": "",
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "type": "datasource"
+          }
+        ]
+      },
+      "annotations": {
+        "list": []
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "row",
+          "title": "Streams & Playback",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "collapsed": false
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Active Streams",
+          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "jellyfin_active_streams{instance=\"jellyfin\"}",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "text", "value": null },
+                  { "color": "green", "value": 1 },
+                  { "color": "yellow", "value": 5 },
+                  { "color": "red", "value": 10 }
+                ]
+              },
+              "unit": "none",
+              "noValue": "0"
+            }
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Transcoding",
+          "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "jellyfin_transcode_streams{instance=\"jellyfin\"}",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "text", "value": null },
+                  { "color": "orange", "value": 1 },
+                  { "color": "red", "value": 5 }
+                ]
+              },
+              "unit": "none",
+              "noValue": "0"
+            }
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "Direct Play",
+          "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "jellyfin_direct_play_streams{instance=\"jellyfin\"}",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "text", "value": null },
+                  { "color": "green", "value": 1 }
+                ]
+              },
+              "unit": "none",
+              "noValue": "0"
+            }
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 5,
+          "type": "stat",
+          "title": "Transcode Bitrate",
+          "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "jellyfin_transcode_bitrate_bps{instance=\"jellyfin\"}",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "text", "value": null },
+                  { "color": "green", "value": 1 }
+                ]
+              },
+              "unit": "bps",
+              "noValue": "0"
+            }
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 6,
+          "type": "stat",
+          "title": "Movies",
+          "gridPos": { "h": 4, "w": 3, "x": 16, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "jellyfin_library_movies_total{instance=\"jellyfin\"}",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "blue", "value": null }]
+              },
+              "unit": "none"
+            }
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 7,
+          "type": "stat",
+          "title": "Series",
+          "gridPos": { "h": 4, "w": 3, "x": 19, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "jellyfin_library_series_total{instance=\"jellyfin\"}",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "blue", "value": null }]
+              },
+              "unit": "none"
+            }
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 8,
+          "type": "stat",
+          "title": "Episodes",
+          "gridPos": { "h": 4, "w": 2, "x": 22, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "jellyfin_library_episodes_total{instance=\"jellyfin\"}",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "blue", "value": null }]
+              },
+              "unit": "none"
+            }
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 9,
+          "type": "timeseries",
+          "title": "Streams Over Time",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "jellyfin_active_streams{instance=\"jellyfin\"}",
+              "legendFormat": "Active",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "jellyfin_transcode_streams{instance=\"jellyfin\"}",
+              "legendFormat": "Transcoding",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "jellyfin_direct_play_streams{instance=\"jellyfin\"}",
+              "legendFormat": "Direct Play",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 20,
+                "pointSize": 5,
+                "showPoints": "auto",
+                "spanNulls": true
+              },
+              "unit": "none",
+              "decimals": 0,
+              "min": 0
+            }
+          },
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          }
+        },
+        {
+          "id": 10,
+          "type": "timeseries",
+          "title": "Transcode Bitrate",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "jellyfin_transcode_bitrate_bps{instance=\"jellyfin\"}",
+              "legendFormat": "Bitrate",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 20,
+                "gradientMode": "scheme"
+              },
+              "unit": "bps",
+              "min": 0,
+              "color": { "mode": "palette-classic" }
+            }
+          },
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          }
+        },
+        {
+          "id": 11,
+          "type": "row",
+          "title": "GPU — NVIDIA GeForce RTX 2080 Ti",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+          "collapsed": false
+        },
+        {
+          "id": 12,
+          "type": "gauge",
+          "title": "GPU Utilization",
+          "gridPos": { "h": 5, "w": 4, "x": 0, "y": 14 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "nvidia_gpu_utilization_percent{instance=\"jellyfin\"}",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 70 },
+                  { "color": "red", "value": 90 }
+                ]
+              },
+              "unit": "percent",
+              "min": 0,
+              "max": 100
+            }
+          }
+        },
+        {
+          "id": 13,
+          "type": "gauge",
+          "title": "Encoder (NVENC)",
+          "gridPos": { "h": 5, "w": 4, "x": 4, "y": 14 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "nvidia_gpu_encoder_utilization_percent{instance=\"jellyfin\"}",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 70 },
+                  { "color": "red", "value": 90 }
+                ]
+              },
+              "unit": "percent",
+              "min": 0,
+              "max": 100
+            }
+          }
+        },
+        {
+          "id": 14,
+          "type": "gauge",
+          "title": "Decoder (NVDEC)",
+          "gridPos": { "h": 5, "w": 4, "x": 8, "y": 14 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "nvidia_gpu_decoder_utilization_percent{instance=\"jellyfin\"}",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 70 },
+                  { "color": "red", "value": 90 }
+                ]
+              },
+              "unit": "percent",
+              "min": 0,
+              "max": 100
+            }
+          }
+        },
+        {
+          "id": 15,
+          "type": "stat",
+          "title": "Temperature",
+          "gridPos": { "h": 5, "w": 3, "x": 12, "y": 14 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "nvidia_gpu_temperature_celsius{instance=\"jellyfin\"}",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 70 },
+                  { "color": "orange", "value": 80 },
+                  { "color": "red", "value": 85 }
+                ]
+              },
+              "unit": "celsius"
+            }
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 16,
+          "type": "stat",
+          "title": "Fan Speed",
+          "gridPos": { "h": 5, "w": 3, "x": 15, "y": 14 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "nvidia_gpu_fan_speed_percent{instance=\"jellyfin\"}",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 70 },
+                  { "color": "red", "value": 90 }
+                ]
+              },
+              "unit": "percent"
+            }
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 17,
+          "type": "stat",
+          "title": "Power Draw",
+          "gridPos": { "h": 5, "w": 3, "x": 18, "y": 14 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "nvidia_gpu_power_draw_watts{instance=\"jellyfin\"}",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 200 },
+                  { "color": "red", "value": 280 }
+                ]
+              },
+              "unit": "watt"
+            }
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 18,
+          "type": "stat",
+          "title": "VRAM Usage",
+          "gridPos": { "h": 5, "w": 3, "x": 21, "y": 14 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "nvidia_gpu_memory_used_mib{instance=\"jellyfin\"} / nvidia_gpu_memory_total_mib{instance=\"jellyfin\"} * 100",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 70 },
+                  { "color": "red", "value": 90 }
+                ]
+              },
+              "unit": "percent",
+              "decimals": 1
+            }
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 33,
+          "type": "stat",
+          "title": "GPU Failures",
+          "description": "GPU crashes detected by watchdog in current time range",
+          "gridPos": { "h": 5, "w": 4, "x": 0, "y": 19 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "increase(nvidia_gpu_failures_total{instance=\"jellyfin\"}[$__range])",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 1 },
+                  { "color": "red", "value": 5 }
+                ]
+              },
+              "unit": "none",
+              "noValue": "0"
+            }
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 34,
+          "type": "stat",
+          "title": "Soft Recoveries",
+          "description": "GPU recovered via module reload (no reboot)",
+          "gridPos": { "h": 5, "w": 4, "x": 4, "y": 19 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "increase(nvidia_gpu_soft_recoveries_total{instance=\"jellyfin\"}[$__range])",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 1 }
+                ]
+              },
+              "unit": "none",
+              "noValue": "0"
+            }
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 35,
+          "type": "stat",
+          "title": "Hard Recoveries",
+          "description": "Soft recovery exhausted — escalated to host PCI reset",
+          "gridPos": { "h": 5, "w": 4, "x": 8, "y": 19 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "increase(nvidia_gpu_hard_recoveries_total{instance=\"jellyfin\"}[$__range])",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "orange", "value": 1 },
+                  { "color": "red", "value": 3 }
+                ]
+              },
+              "unit": "none",
+              "noValue": "0"
+            }
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 36,
+          "type": "timeseries",
+          "title": "GPU Failures & Recoveries Over Time",
+          "gridPos": { "h": 5, "w": 12, "x": 12, "y": 19 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "increase(nvidia_gpu_failures_total{instance=\"jellyfin\"}[5m])",
+              "legendFormat": "Failures",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "increase(nvidia_gpu_soft_recoveries_total{instance=\"jellyfin\"}[5m])",
+              "legendFormat": "Soft Recoveries",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "increase(nvidia_gpu_hard_recoveries_total{instance=\"jellyfin\"}[5m])",
+              "legendFormat": "Hard Recoveries (PCI reset)",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 80,
+                "stacking": { "mode": "normal" },
+                "spanNulls": true
+              },
+              "unit": "none",
+              "decimals": 0,
+              "min": 0
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Failures" },
+                "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Soft Recoveries" },
+                "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Hard Recoveries (PCI reset)" },
+                "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }]
+              }
+            ]
+          },
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          }
+        },
+        {
+          "id": 37,
+          "type": "row",
+          "title": "Host GPU Recovery (Proxmox PCI Reset)",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 },
+          "collapsed": false
+        },
+        {
+          "id": 38,
+          "type": "stat",
+          "title": "GPU Healthy (Host View)",
+          "description": "Whether the Proxmox host can reach the GPU inside the VM via guest agent",
+          "gridPos": { "h": 5, "w": 4, "x": 0, "y": 25 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "gpu_vm_monitor_healthy{vmid=\"115\"}",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "green", "value": 1 }
+                ]
+              },
+              "mappings": [
+                { "type": "value", "options": { "0": { "text": "UNHEALTHY", "color": "red" }, "1": { "text": "HEALTHY", "color": "green" } } }
+              ],
+              "unit": "none",
+              "noValue": "N/A"
+            }
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 39,
+          "type": "stat",
+          "title": "Consecutive Failures",
+          "description": "Current consecutive GPU check failures before PCI reset triggers (threshold: 3)",
+          "gridPos": { "h": 5, "w": 4, "x": 4, "y": 25 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "gpu_vm_monitor_consecutive_failures{vmid=\"115\"}",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 1 },
+                  { "color": "red", "value": 3 }
+                ]
+              },
+              "unit": "none",
+              "noValue": "0"
+            }
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 40,
+          "type": "stat",
+          "title": "PCI Resets Total",
+          "description": "Total PCI device resets performed by Proxmox host to recover crashed GPU",
+          "gridPos": { "h": 5, "w": 4, "x": 8, "y": 25 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "gpu_vm_monitor_pci_resets_total",
+              "legendFormat": "",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "orange", "value": 1 },
+                  { "color": "red", "value": 5 }
+                ]
+              },
+              "unit": "none",
+              "noValue": "0"
+            }
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 41,
+          "type": "timeseries",
+          "title": "Host GPU Health & PCI Resets Over Time",
+          "gridPos": { "h": 5, "w": 12, "x": 12, "y": 25 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "gpu_vm_monitor_healthy{vmid=\"115\"}",
+              "legendFormat": "Healthy",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "gpu_vm_monitor_consecutive_failures{vmid=\"115\"}",
+              "legendFormat": "Consecutive Failures",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "increase(gpu_vm_monitor_pci_resets_total[1h])",
+              "legendFormat": "PCI Resets (1h)",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "stepAfter",
+                "fillOpacity": 15,
+                "spanNulls": true
+              },
+              "unit": "none",
+              "decimals": 0,
+              "min": 0
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Healthy" },
+                "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Consecutive Failures" },
+                "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "PCI Resets (1h)" },
+                "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+              }
+            ]
+          },
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          }
+        },
+        {
+          "id": 19,
+          "type": "timeseries",
+          "title": "GPU Utilization Over Time",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "nvidia_gpu_utilization_percent{instance=\"jellyfin\"}",
+              "legendFormat": "GPU Core",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "nvidia_gpu_encoder_utilization_percent{instance=\"jellyfin\"}",
+              "legendFormat": "Encoder (NVENC)",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "nvidia_gpu_decoder_utilization_percent{instance=\"jellyfin\"}",
+              "legendFormat": "Decoder (NVDEC)",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 15,
+                "spanNulls": true
+              },
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "color": { "mode": "palette-classic" }
+            }
+          },
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          }
+        },
+        {
+          "id": 20,
+          "type": "timeseries",
+          "title": "GPU Temperature & Fan",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 30 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "nvidia_gpu_temperature_celsius{instance=\"jellyfin\"}",
+              "legendFormat": "Temperature",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "nvidia_gpu_fan_speed_percent{instance=\"jellyfin\"}",
+              "legendFormat": "Fan Speed",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 10,
+                "spanNulls": true
+              },
+              "min": 0,
+              "color": { "mode": "palette-classic" }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Temperature" },
+                "properties": [
+                  { "id": "unit", "value": "celsius" },
+                  { "id": "custom.axisPlacement", "value": "left" }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Fan Speed" },
+                "properties": [
+                  { "id": "unit", "value": "percent" },
+                  { "id": "custom.axisPlacement", "value": "right" }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          }
+        },
+        {
+          "id": 21,
+          "type": "timeseries",
+          "title": "GPU Power Draw",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 38 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "nvidia_gpu_power_draw_watts{instance=\"jellyfin\"}",
+              "legendFormat": "Power Draw",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "nvidia_gpu_power_limit_watts{instance=\"jellyfin\"}",
+              "legendFormat": "Power Limit",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 15,
+                "spanNulls": true
+              },
+              "unit": "watt",
+              "min": 0,
+              "color": { "mode": "palette-classic" }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Power Limit" },
+                "properties": [
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+                  { "id": "custom.fillOpacity", "value": 0 }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          }
+        },
+        {
+          "id": 22,
+          "type": "timeseries",
+          "title": "VRAM Usage",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 38 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "nvidia_gpu_memory_used_mib{instance=\"jellyfin\"}",
+              "legendFormat": "Used",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "nvidia_gpu_memory_total_mib{instance=\"jellyfin\"}",
+              "legendFormat": "Total",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 20,
+                "spanNulls": true
+              },
+              "unit": "decmbytes",
+              "min": 0,
+              "color": { "mode": "palette-classic" }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Total" },
+                "properties": [
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+                  { "id": "custom.fillOpacity", "value": 0 }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          }
+        },
+        {
+          "id": 23,
+          "type": "row",
+          "title": "System Resources",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 46 },
+          "collapsed": false
+        },
+        {
+          "id": 24,
+          "type": "timeseries",
+          "title": "CPU Usage",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 47 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "100 - (avg(rate(node_cpu_seconds_total{instance=\"jellyfin\", mode=\"idle\"}[5m])) * 100)",
+              "legendFormat": "CPU Usage",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 20,
+                "gradientMode": "scheme"
+              },
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 70 },
+                  { "color": "red", "value": 90 }
+                ]
+              },
+              "color": { "mode": "continuous-GrYlRd" }
+            }
+          },
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          }
+        },
+        {
+          "id": 25,
+          "type": "timeseries",
+          "title": "Memory Usage",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 47 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "(1 - node_memory_MemAvailable_bytes{instance=\"jellyfin\"} / node_memory_MemTotal_bytes{instance=\"jellyfin\"}) * 100",
+              "legendFormat": "RAM Used",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 20,
+                "gradientMode": "scheme"
+              },
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 70 },
+                  { "color": "red", "value": 90 }
+                ]
+              },
+              "color": { "mode": "continuous-GrYlRd" }
+            }
+          },
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          }
+        },
+        {
+          "id": 26,
+          "type": "timeseries",
+          "title": "Network Throughput",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 55 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "rate(node_network_receive_bytes_total{instance=\"jellyfin\", device!~\"lo|docker.*|br-.*|veth.*\"}[5m]) * 8",
+              "legendFormat": "Inbound",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "rate(node_network_transmit_bytes_total{instance=\"jellyfin\", device!~\"lo|docker.*|br-.*|veth.*\"}[5m]) * 8",
+              "legendFormat": "Outbound",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 15,
+                "spanNulls": true
+              },
+              "unit": "bps",
+              "min": 0,
+              "color": { "mode": "palette-classic" }
+            }
+          },
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          }
+        },
+        {
+          "id": 27,
+          "type": "timeseries",
+          "title": "Disk I/O",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 55 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "rate(node_disk_read_bytes_total{instance=\"jellyfin\", device!~\"loop.*\"}[5m])",
+              "legendFormat": "Read {{ device }}",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "rate(node_disk_written_bytes_total{instance=\"jellyfin\", device!~\"loop.*\"}[5m])",
+              "legendFormat": "Write {{ device }}",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 15,
+                "spanNulls": true
+              },
+              "unit": "Bps",
+              "min": 0,
+              "color": { "mode": "palette-classic" }
+            }
+          },
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          }
+        },
+        {
+          "id": 28,
+          "type": "row",
+          "title": "NAS Media Storage",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 63 },
+          "collapsed": false
+        },
+        {
+          "id": 29,
+          "type": "timeseries",
+          "title": "NFS Read/Write Operations (Jellyfin Client)",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 64 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "rate(node_nfs_requests_total{instance=\"jellyfin\", method=\"Read\", proto=\"4\"}[5m])",
+              "legendFormat": "NFS Reads/s",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "rate(node_nfs_requests_total{instance=\"jellyfin\", method=\"Write\", proto=\"4\"}[5m])",
+              "legendFormat": "NFS Writes/s",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "rate(node_nfs_requests_total{instance=\"jellyfin\", method=\"ReadDir\", proto=\"4\"}[5m])",
+              "legendFormat": "NFS ReadDir/s",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 15,
+                "spanNulls": true
+              },
+              "unit": "ops",
+              "min": 0,
+              "color": { "mode": "palette-classic" }
+            }
+          },
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          }
+        },
+        {
+          "id": 30,
+          "type": "timeseries",
+          "title": "TrueNAS Disk I/O (Media Pool)",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 64 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "sum(rate(node_disk_read_bytes_total{instance=\"truenas\", device=~\"sd.*\"}[5m]))",
+              "legendFormat": "Read",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "sum(rate(node_disk_written_bytes_total{instance=\"truenas\", device=~\"sd.*\"}[5m]))",
+              "legendFormat": "Write",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 20,
+                "gradientMode": "scheme",
+                "spanNulls": true
+              },
+              "unit": "Bps",
+              "min": 0,
+              "color": { "mode": "palette-classic" }
+            }
+          },
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          }
+        },
+        {
+          "id": 31,
+          "type": "timeseries",
+          "title": "NFS Retransmissions & Errors",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 72 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "rate(node_nfs_rpc_retransmissions_total{instance=\"jellyfin\"}[5m])",
+              "legendFormat": "RPC Retransmissions",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "rate(node_nfs_rpc_authentication_refreshes_total{instance=\"jellyfin\"}[5m])",
+              "legendFormat": "Auth Refreshes",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 10,
+                "spanNulls": true
+              },
+              "unit": "ops",
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "red", "value": 1 }
+                ]
+              },
+              "color": { "mode": "continuous-GrYlRd" }
+            }
+          },
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          }
+        },
+        {
+          "id": 32,
+          "type": "timeseries",
+          "title": "TrueNAS Disk Latency",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 72 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "rate(node_disk_read_time_seconds_total{instance=\"truenas\", device=~\"sd.*\"}[5m]) / rate(node_disk_reads_completed_total{instance=\"truenas\", device=~\"sd.*\"}[5m])",
+              "legendFormat": "Read Latency {{ device }}",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            },
+            {
+              "expr": "rate(node_disk_write_time_seconds_total{instance=\"truenas\", device=~\"sd.*\"}[5m]) / rate(node_disk_writes_completed_total{instance=\"truenas\", device=~\"sd.*\"}[5m])",
+              "legendFormat": "Write Latency {{ device }}",
+              "datasource": { "type": "prometheus", "uid": "${datasource}" }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 10,
+                "spanNulls": true
+              },
+              "unit": "s",
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 0.01 },
+                  { "color": "red", "value": 0.05 }
+                ]
+              },
+              "color": { "mode": "continuous-GrYlRd" }
+            }
+          },
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          }
+        }
+      ]
+    }

@@ -1,0 +1,218 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-kubernetes-k8s-logs
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: "Kubernetes"
+data:
+  k8s-logs.json: |
+    {
+      "annotations": {
+        "list": []
+      },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [],
+      "panels": [
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "id": 1,
+          "title": "Overview",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "loki", "uid": "${datasource}" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisLabel": "",
+                "barAlignment": 0,
+                "drawStyle": "bars",
+                "fillOpacity": 50,
+                "gradientMode": "none",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "showPoints": "never",
+                "stacking": { "group": "A", "mode": "normal" }
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 6, "w": 24, "x": 0, "y": 1 },
+          "id": 2,
+          "options": {
+            "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "loki", "uid": "${datasource}" },
+              "expr": "sum by (namespace) (count_over_time({job=\"kubernetes\", namespace=~\"$namespace\", app=~\"$app\"} [$__interval]))",
+              "legendFormat": "{{namespace}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Log Volume by Namespace",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "loki", "uid": "${datasource}" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisLabel": "",
+                "barAlignment": 0,
+                "drawStyle": "bars",
+                "fillOpacity": 50,
+                "gradientMode": "none",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "showPoints": "never",
+                "stacking": { "group": "A", "mode": "normal" }
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 6, "w": 24, "x": 0, "y": 7 },
+          "id": 5,
+          "options": {
+            "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "loki", "uid": "${datasource}" },
+              "expr": "sum by (app) (count_over_time({job=\"kubernetes\", namespace=~\"$namespace\", app=~\"$app\"} [$__interval]))",
+              "legendFormat": "{{app}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Log Volume by App",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+          "id": 3,
+          "title": "Logs",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "loki", "uid": "${datasource}" },
+          "gridPos": { "h": 20, "w": 24, "x": 0, "y": 14 },
+          "id": 4,
+          "options": {
+            "dedupStrategy": "none",
+            "enableLogDetails": true,
+            "prettifyLogMessage": false,
+            "showCommonLabels": false,
+            "showLabels": true,
+            "showTime": true,
+            "sortOrder": "Descending",
+            "wrapLogMessage": false
+          },
+          "targets": [
+            {
+              "datasource": { "type": "loki", "uid": "${datasource}" },
+              "expr": "{job=\"kubernetes\", namespace=~\"$namespace\", app=~\"$app\", pod=~\"$pod\"} |= `$search` | json | line_format `{{.message}}`",
+              "refId": "A"
+            }
+          ],
+          "title": "Kubernetes Logs",
+          "type": "logs"
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["logs", "kubernetes", "loki"],
+      "templating": {
+        "list": [
+          {
+            "current": { "text": "Loki", "value": "Loki" },
+            "hide": 0,
+            "includeAll": false,
+            "label": "Datasource",
+            "multi": false,
+            "name": "datasource",
+            "options": [],
+            "query": "loki",
+            "refresh": 1,
+            "type": "datasource"
+          },
+          {
+            "allValue": ".*",
+            "current": { "text": "All", "value": "$__all" },
+            "datasource": { "type": "loki", "uid": "${datasource}" },
+            "definition": "label_values({job=\"kubernetes\"}, namespace)",
+            "hide": 0,
+            "includeAll": true,
+            "label": "Namespace",
+            "multi": true,
+            "name": "namespace",
+            "query": "label_values({job=\"kubernetes\"}, namespace)",
+            "refresh": 2,
+            "sort": 1,
+            "type": "query"
+          },
+          {
+            "allValue": ".*",
+            "current": { "text": "All", "value": "$__all" },
+            "datasource": { "type": "loki", "uid": "${datasource}" },
+            "definition": "label_values({job=\"kubernetes\", namespace=~\"$namespace\"}, app)",
+            "hide": 0,
+            "includeAll": true,
+            "label": "App",
+            "multi": true,
+            "name": "app",
+            "query": "label_values({job=\"kubernetes\", namespace=~\"$namespace\"}, app)",
+            "refresh": 2,
+            "sort": 1,
+            "type": "query"
+          },
+          {
+            "allValue": ".*",
+            "current": { "text": "All", "value": "$__all" },
+            "datasource": { "type": "loki", "uid": "${datasource}" },
+            "definition": "label_values({job=\"kubernetes\", namespace=~\"$namespace\", app=~\"$app\"}, pod)",
+            "hide": 0,
+            "includeAll": true,
+            "label": "Pod",
+            "multi": true,
+            "name": "pod",
+            "query": "label_values({job=\"kubernetes\", namespace=~\"$namespace\", app=~\"$app\"}, pod)",
+            "refresh": 2,
+            "sort": 1,
+            "type": "query"
+          },
+          {
+            "current": { "text": "", "value": "" },
+            "hide": 0,
+            "label": "Search",
+            "name": "search",
+            "options": [{ "selected": true, "text": "", "value": "" }],
+            "query": "",
+            "type": "textbox"
+          }
+        ]
+      },
+      "time": { "from": "now-1h", "to": "now" },
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "Kubernetes Log Explorer",
+      "uid": "k8s-log-explorer",
+      "version": 1
+    }

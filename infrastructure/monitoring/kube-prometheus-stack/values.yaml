@@ -50,9 +50,87 @@ kube-prometheus-stack:
           memory: 2Gi
           cpu: 1000m
 
-  # Disable Grafana - using external Grafana VM at 192.168.1.121
+  # Grafana — migrated from VM 192.168.1.121 to K8s
   grafana:
-    enabled: false
+    enabled: true
+    image:
+      tag: "12.4.1"
+
+    # Server configuration
+    grafana.ini:
+      server:
+        domain: graphy.herro.me
+        root_url: https://graphy.herro.me
+      database:
+        type: postgres
+        host: 192.168.1.123:5432
+        name: grafana
+        user: grafana
+        ssl_mode: disable
+
+    # PostgreSQL password from ExternalSecret
+    envFromSecret: grafana-secrets
+
+    # Plugins
+    plugins:
+      - grafana-opensearch-datasource
+      - marcusolsson-calendar-panel
+      - neocat-cal-heatmap-panel
+
+    # Datasources provisioned via sidecar
+    additionalDataSources:
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki.monitoring.svc.cluster.local:3100
+        isDefault: false
+        jsonData:
+          maxLines: 1000
+      - name: Wazuh-OpenSearch
+        type: grafana-opensearch-datasource
+        access: proxy
+        url: https://192.168.1.171:9200
+        isDefault: false
+        jsonData:
+          database: "wazuh-alerts-*"
+          flavor: opensearch
+          version: "2.18.0"
+          pplEnabled: true
+          timeField: "timestamp"
+          tlsSkipVerify: true
+        secureJsonData:
+          basicAuthPassword: $__env{WAZUH_OPENSEARCH_PASSWORD}
+        basicAuth: true
+        basicAuthUser: admin
+
+    # Dashboard sidecar
+    sidecar:
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+        labelValue: "1"
+        folderAnnotation: grafana_folder
+        provider:
+          foldersFromFilesStructure: false
+          allowUiUpdates: true
+
+    # No persistent volume — PostgreSQL is the backend
+    persistence:
+      enabled: false
+
+    # Service — reuse the old Grafana VM IP via MetalLB
+    service:
+      type: LoadBalancer
+      loadBalancerIP: 192.168.1.121
+
+    # Resource limits
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 100m
+      limits:
+        memory: 512Mi
+        cpu: 500m
 
   # Alertmanager configuration
   # Config secret is managed by ExternalSecret (alertmanager-external-secret.yaml)
