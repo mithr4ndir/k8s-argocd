@@ -14,3 +14,15 @@ external-secrets:
     limits:
       cpu: 200m
       memory: 256Mi
+
+  # Limit concurrent reconciles to prevent retry storms from
+  # overwhelming upstream secret providers (1Password, Vault, etc.)
+  # Default is 1; keep it low to be safe.
+  concurrent: 1
+
+  # Extra CLI flags for the core controller
+  extraArgs:
+    # Cap reconciliation events per second across all ExternalSecrets.
+    # Prevents a missing/invalid secret from causing an API rate-limit
+    # storm against the provider (learned the hard way: 11h of 429s).
+    max-reconcile-rate: "5"
