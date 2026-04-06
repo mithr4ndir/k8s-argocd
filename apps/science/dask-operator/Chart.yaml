@@ -1,0 +1,8 @@
+apiVersion: v2
+name: dask-kubernetes-operator
+version: 1.0.0
+description: Dask Kubernetes Operator for distributed computing
+dependencies:
+  - name: dask-kubernetes-operator
+    version: "2026.3.0"
+    repository: https://helm.dask.org
