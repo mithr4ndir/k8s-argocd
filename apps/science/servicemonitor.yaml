@@ -1,4 +1,3 @@
----
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -8,19 +7,21 @@ metadata:
     release: kube-prometheus-stack
     app.kubernetes.io/name: dask-scheduler
     app.kubernetes.io/part-of: lsdb-cluster
+  annotations:
+    argocd.argoproj.io/sync-wave: '2'
 spec:
   jobLabel: dask-scheduler
   namespaceSelector:
     matchNames:
-      - science
+    - science
   selector:
     matchLabels:
       dask.org/cluster-name: lsdb-cluster
       dask.org/component: scheduler
   endpoints:
-    - port: http-dashboard
-      path: /metrics
-      interval: 15s
-      scrapeTimeout: 10s
-      scheme: http
-      honorLabels: true
+  - port: http-dashboard
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+    scheme: http
+    honorLabels: true
