@@ -60,7 +60,12 @@ kube-prometheus-stack:
   alertmanager:
     enabled: true
     alertmanagerSpec:
+      replicas: 2
       configSecret: alertmanager-custom-config
+      podAntiAffinity: "soft"
+      podDisruptionBudget:
+        enabled: true
+        minAvailable: 1
       storage:
         volumeClaimTemplate:
           spec:
@@ -225,6 +230,14 @@ kube-prometheus-stack:
               annotations:
                 summary: "Prometheus rule evaluation failures"
                 description: "Prometheus is failing to evaluate alerting/recording rules."
+            - alert: PrometheusNotificationsDropped
+              expr: rate(prometheus_notifications_dropped_total[5m]) > 0
+              for: 5m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Prometheus is dropping notifications to AlertManager"
+                description: "Prometheus has been dropping alert notifications for 5 minutes. AlertManager may be unreachable. Current rate: {{ $value | printf \"%.2f\" }}/s."
     proxmox-alerts:
       groups:
         - name: proxmox-availability
