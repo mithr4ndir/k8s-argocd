@@ -152,11 +152,11 @@ data:
     - Monitoring:
         - Grafana:
             icon: grafana.png
-            href: http://192.168.1.121:3000
+            href: http://192.168.1.229
             description: Dashboards & visualization
             widget:
               type: grafana
-              url: http://192.168.1.121:3000
+              url: http://192.168.1.229
               username: "{{HOMEPAGE_VAR_GRAFANA_USER}}"
               password: "{{HOMEPAGE_VAR_GRAFANA_PASS}}"
         - Prometheus:
