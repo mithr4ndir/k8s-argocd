@@ -9,3 +9,6 @@ resources:
   - servicemonitor.yaml
   - prometheus-rules.yaml
   - grafana-dashboard.yaml
+  - sky-explorer/deployment.yaml
+  - sky-explorer/service.yaml
+  - sky-explorer/ingress.yaml

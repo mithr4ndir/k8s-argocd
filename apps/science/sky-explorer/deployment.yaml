@@ -1,0 +1,60 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sky-explorer
+  namespace: science
+  labels:
+    app: sky-explorer
+  annotations:
+    argocd.argoproj.io/sync-wave: '3'
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sky-explorer
+  template:
+    metadata:
+      labels:
+        app: sky-explorer
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: sky-explorer
+          image: ghcr.io/mithr4ndir/sky-explorer:latest
+          ports:
+            - name: http
+              containerPort: 8050
+              protocol: TCP
+          env:
+            - name: GAIA_CATALOG_URL
+              value: "https://data.lsdb.io/hats/gaia_dr3/gaia"
+            - name: DASK_SCHEDULER
+              value: "lsdb-cluster-scheduler.science.svc.cluster.local:8786"
+            - name: MAX_RESULTS
+              value: "50000"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: 2Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
