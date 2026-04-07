@@ -1,0 +1,24 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sky-explorer
+  namespace: science
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: '300'
+    nginx.ingress.kubernetes.io/proxy-send-timeout: '300'
+    nginx.ingress.kubernetes.io/proxy-body-size: '10m'
+    argocd.argoproj.io/sync-wave: '3'
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: sky.quasarlab.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sky-explorer
+                port:
+                  number: 8050
