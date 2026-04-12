@@ -31,6 +31,10 @@ data:
         style: row
         columns: 3
         icon: mdi-cog
+      Temperatures:
+        style: row
+        columns: 3
+        icon: mdi-thermometer
 
   bookmarks.yaml: |
     - Documentation:
@@ -175,6 +179,146 @@ data:
             icon: alertmanager.png
             href: http://192.168.1.230:9093
             description: Alert routing to Discord
+
+    - Temperatures:
+        - pve:
+            icon: proxmox.png
+            href: http://192.168.1.230:9090/graph?g0.expr=node_hwmon_temp_celsius%7Binstance%3D%22pve%22%7D
+            description: Hypervisor 1 (Intel, NVMe)
+            widget:
+              type: prometheusmetric
+              url: http://192.168.1.230:9090
+              refreshInterval: 30000
+              metrics:
+                - label: CPU
+                  query: max(node_hwmon_temp_celsius{instance="pve",chip=~"platform_coretemp.*",sensor="temp1"})
+                  format:
+                    type: number
+                    suffix: "°C"
+                    options:
+                      maximumFractionDigits: 0
+                - label: NVMe
+                  query: max(node_hwmon_temp_celsius{instance="pve",chip=~"nvme.*"})
+                  format:
+                    type: number
+                    suffix: "°C"
+                    options:
+                      maximumFractionDigits: 0
+              highlight:
+                CPU:
+                  numeric:
+                    - level: danger
+                      when: gt
+                      value: 80
+                    - level: warn
+                      when: gte
+                      value: 65
+                    - level: good
+                      when: lt
+                      value: 65
+                NVMe:
+                  numeric:
+                    - level: danger
+                      when: gt
+                      value: 70
+                    - level: warn
+                      when: gte
+                      value: 55
+                    - level: good
+                      when: lt
+                      value: 55
+        - pve2:
+            icon: proxmox.png
+            href: http://192.168.1.230:9090/graph?g0.expr=node_hwmon_temp_celsius%7Binstance%3D%22pve2%22%7D
+            description: Hypervisor 2 (AMD, GPU node)
+            widget:
+              type: prometheusmetric
+              url: http://192.168.1.230:9090
+              refreshInterval: 30000
+              metrics:
+                - label: CPU
+                  query: max(node_hwmon_temp_celsius{instance="pve2",chip="pci0000:00_0000:00:18_3",sensor="temp1"})
+                  format:
+                    type: number
+                    suffix: "°C"
+                    options:
+                      maximumFractionDigits: 0
+                - label: GPU
+                  query: max(node_hwmon_temp_celsius{instance="pve2",chip=~"0000:02:02.*"})
+                  format:
+                    type: number
+                    suffix: "°C"
+                    options:
+                      maximumFractionDigits: 0
+              highlight:
+                CPU:
+                  numeric:
+                    - level: danger
+                      when: gt
+                      value: 80
+                    - level: warn
+                      when: gte
+                      value: 65
+                    - level: good
+                      when: lt
+                      value: 65
+                GPU:
+                  numeric:
+                    - level: danger
+                      when: gt
+                      value: 83
+                    - level: warn
+                      when: gte
+                      value: 75
+                    - level: good
+                      when: lt
+                      value: 75
+        - truenas:
+            icon: truenas.png
+            href: http://192.168.1.230:9090/graph?g0.expr=node_hwmon_temp_celsius%7Binstance%3D%22truenas%22%7D
+            description: NAS (Intel, NVMe pool)
+            widget:
+              type: prometheusmetric
+              url: http://192.168.1.230:9090
+              refreshInterval: 30000
+              metrics:
+                - label: CPU
+                  query: max(node_hwmon_temp_celsius{instance="truenas",chip=~"platform_coretemp.*",sensor="temp1"})
+                  format:
+                    type: number
+                    suffix: "°C"
+                    options:
+                      maximumFractionDigits: 0
+                - label: NVMe
+                  query: max(node_hwmon_temp_celsius{instance="truenas",chip=~"nvme.*"})
+                  format:
+                    type: number
+                    suffix: "°C"
+                    options:
+                      maximumFractionDigits: 0
+              highlight:
+                CPU:
+                  numeric:
+                    - level: danger
+                      when: gt
+                      value: 80
+                    - level: warn
+                      when: gte
+                      value: 65
+                    - level: good
+                      when: lt
+                      value: 65
+                NVMe:
+                  numeric:
+                    - level: danger
+                      when: gt
+                      value: 70
+                    - level: warn
+                      when: gte
+                      value: 55
+                    - level: good
+                      when: lt
+                      value: 55
 
     - Management:
         - Nginx Proxy Manager:
