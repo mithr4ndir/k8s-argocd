@@ -6,5 +6,6 @@ resources:
   - loki-external-svc.yaml
   - vector-aggregator-svc.yaml
   - grafana-externalsecret.yaml
+  - healthchecks-watchdog-externalsecret.yaml
   - grafana-dashboards
   - discord-alert-proxy
