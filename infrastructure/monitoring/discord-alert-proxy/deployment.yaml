@@ -23,13 +23,17 @@ spec:
       annotations:
         reloader.stakater.com/auto: "true"
     spec:
-      topologySpreadConstraints:
-        - maxSkew: 1
-          topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
-          labelSelector:
-            matchLabels:
-              app: discord-alert-proxy
+      # system-cluster-critical keeps the alerter from being evicted
+      # before the workloads it monitors under node memory pressure.
+      # A PDB (pdb.yaml) prevents voluntary eviction but does not protect
+      # against kubelet-level eviction, which is what this priority class
+      # addresses.
+      priorityClassName: system-cluster-critical
+      # Soft pod anti-affinity keeps the two replicas on different nodes
+      # when possible. Previously paired with a topologySpreadConstraint
+      # expressing the same intent; dropped that to avoid two overlapping
+      # declarations (both soft, so they did not conflict, but only one
+      # is needed).
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
