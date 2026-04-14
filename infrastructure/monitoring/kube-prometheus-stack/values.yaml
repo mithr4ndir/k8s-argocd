@@ -329,6 +329,10 @@ kube-prometheus-stack:
                 summary: "PVE exporter unreachable at {{ $labels.instance }}"
                 description: "Proxmox exporter {{ $labels.instance }} has been down for 3 minutes."
             - alert: PveGuestDown
+              # The tags label is a semicolon-delimited list from Proxmox
+              # (e.g. "linux;services;no-alert"). Anchor on the separators
+              # so tag names like 'no-alert-policy' or 'preventive-maintenance'
+              # do NOT silently suppress alerts.
               expr: |
                 (
                   (pve_up{job="proxmox", id=~"qemu/.*"} == 0)
@@ -336,23 +340,28 @@ kube-prometheus-stack:
                   (pve_onboot_status{job="proxmox"} == 1)
                 )
                 * on(id, instance) group_left(name, node, tags)
-                (pve_guest_info{job="proxmox", template="0", tags!~".*(no-alert|maintenance).*"})
+                (pve_guest_info{job="proxmox", template="0", tags!~"(.*;)?(no-alert|maintenance)(;.*)?"})
               for: 5m
               labels:
                 severity: warning
               annotations:
                 summary: "{{ $labels.name }} ({{ $labels.id }})"
                 description: |
-                  VM {{ $labels.name }} ({{ $labels.id }}) on {{ $labels.node }} has onboot=1 but is not running. Tag the VM with 'no-alert' (permanent) or 'maintenance' (temporary) in Proxmox to silence this alert.
+                  VM {{ $labels.name }} ({{ $labels.id }}) on {{ $labels.node }} has onboot=1 but is not running. To silence: `qm set {{ $labels.id | reReplaceAll "^qemu/" "" }} --tags <existing>,no-alert` (permanent) or `,maintenance` (temporary).
+                runbook_url: "https://github.com/mithr4ndir/k8s-argocd/blob/main/infrastructure/monitoring/kube-prometheus-stack/values.yaml#PveGuestDown"
             - alert: PveGuestMaintenanceTagStale
+              # Same anchored-separator match as PveGuestDown so we don't
+              # warn on harmless tags that happen to contain the substring.
               expr: |
-                pve_guest_info{job="proxmox", template="0", tags=~".*maintenance.*"}
+                pve_guest_info{job="proxmox", template="0", tags=~"(.*;)?maintenance(;.*)?"}
               for: 24h
               labels:
                 severity: info
               annotations:
                 summary: "{{ $labels.name }} still tagged 'maintenance' after 24h"
-                description: "VM {{ $labels.name }} ({{ $labels.id }}) on {{ $labels.node }} has been tagged 'maintenance' for over 24 hours. Remove the tag if the maintenance window is over, otherwise this VM is silently excluded from PveGuestDown alerts."
+                description: |
+                  VM {{ $labels.name }} ({{ $labels.id }}) on {{ $labels.node }} has been tagged 'maintenance' for over 24 hours. Remove with `qm set {{ $labels.id | reReplaceAll "^qemu/" "" }} --tags <existing tags without maintenance>` or this VM stays silently excluded from PveGuestDown.
+                runbook_url: "https://github.com/mithr4ndir/k8s-argocd/blob/main/infrastructure/monitoring/kube-prometheus-stack/values.yaml#PveGuestMaintenanceTagStale"
             - alert: PveQuorumDegraded
               expr: pve_cluster_quorum_total_votes{job="vm-node-exporter"} < pve_cluster_quorum_expected_votes{job="vm-node-exporter"}
               for: 2m
