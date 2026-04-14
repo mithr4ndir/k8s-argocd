@@ -1,0 +1,266 @@
+import json
+import os
+import random
+import asyncio
+from contextlib import asynccontextmanager
+
+import httpx
+import uvicorn
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
+DISCORD_WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
+
+CRITICAL_MESSAGES = [
+    "\U0001f525 A Balrog of Morgoth has risen in the depths of Moria!",
+    "\u2694\ufe0f The forces of Mordor march upon our servers!",
+    "\U0001f30b Mount Doom stirs... darkness spreads across the land!",
+    "\U0001f441\ufe0f The Eye of Sauron has turned its gaze upon us!",
+    "\U0001f409 A shadow and a flame... a creature of the ancient world!",
+    "\U0001f480 The Witch-King rides forth \u2014 no man can stop this!",
+    "\U0001f5e1\ufe0f Orcs have breached the walls of Helm's Deep!",
+]
+
+WARNING_MESSAGES = [
+    "\U0001f916 I've got a bad feeling about this... \u2014 Han Solo",
+    "\u26a0\ufe0f Do or do not, there is no try. But right now... we're just trying. \u2014 Yoda",
+    "\U0001f300 It's a trap! ...probably. \u2014 Admiral Ackbar",
+    "\U0001f527 This is where the fun begins... \u2014 Anakin",
+    "\U0001f4ab The garbage chute was a really wonderful idea! \u2014 Leia",
+    "\U0001f438 Much to learn, you still have. \u2014 Yoda",
+    "\U0001f3af Never tell me the odds! \u2014 Han Solo",
+    "\U0001f937 I am altering the deal. Pray I don't alter it any further. \u2014 Vader",
+]
+
+INFO_MESSAGES = [
+    "\U0001f9d9 The Ents are on the march! Something has changed in the forest...",
+    "\U0001f4dc One does not simply walk into production without making changes.",
+    "\U0001f527 I am altering the configuration. Pray I don't alter it any further. \u2014 Vader",
+    "\U0001f300 The ring of power has been moved... the configuration shifts.",
+    "\U0001f3af These aren't the configs you're looking for... wait, actually they are.",
+    "\U0001f985 The Eagles are coming! And they brought configuration changes.",
+    "\u2728 A wizard is never late, nor does he leave configs unchanged.",
+]
+
+RESOLVED_MESSAGES = [
+    "\U0001f305 The Shire is safe once more. The hobbits can rest easy.",
+    "\u2728 The light of E\u00e4rendil shines bright \u2014 the darkness has passed.",
+    "\U0001f3f0 The white tree of Gondor blooms again!",
+    "\U0001f9d9 A wizard is never late, nor is he early. He arrives precisely when the service comes back online.",
+    "\U0001f33f The Ents have spoken \u2014 the forest is at peace.",
+    "\u2b50 The stars are veiled, but the danger has passed. Sleep well, Middle-earth.",
+    "\U0001f985 The Eagles are coming! ...and they brought uptime.",
+    "\U0001f37a And they all lived happily ever after, with a pint at the Green Dragon.",
+]
+
+CRITICAL_ART = [
+    (
+        "        .-'```'-.       \n"
+        "      .'    _    '.     \n"
+        "     /    /`0`\\    \\    \n"
+        "    |    | /_\\ |    |   \n"
+        "     \\    \\_|_/    /    \n"
+        "      '.   ~~~  .'     \n"
+        "        '-.....-'      "
+    ),
+    (
+        "       /\\             \n"
+        "      /  \\            \n"
+        "     / .. \\           \n"
+        "    / .  . \\          \n"
+        "   /  .  .  \\         \n"
+        "  /   .  .   \\        \n"
+        " /____....____\\       \n"
+        "   Mount Doom         "
+    ),
+    (
+        "    .  .  .  .        \n"
+        "   . \\( )/ .         \n"
+        "  . - {eye} - .       \n"
+        "   . /( )\\ .         \n"
+        "    .  .  .  .        \n"
+        "   The Dark Lord      "
+    ),
+]
+
+# In-memory store: group_key -> discord message_id
+message_store = {}
+
+def group_key(payload):
+    """Build a stable key from Alertmanager's groupLabels."""
+    group = payload.get("groupLabels", {})
+    parts = sorted(group.items())
+    return "|".join(f"{k}={v}" for k, v in parts)
+
+def build_embed(payload):
+    alerts = payload.get("alerts", [])
+    group_status = payload.get("status", "firing")
+    common = payload.get("commonLabels", {})
+    alertname = common.get("alertname", "Alert")
+    severity = common.get("severity", "warning")
+
+    if group_status == "resolved":
+        color = 65280
+        theme_msg = random.choice(RESOLVED_MESSAGES)
+        emoji = "\U0001f7e2"
+    elif severity == "critical":
+        color = 16711680
+        theme_msg = random.choice(CRITICAL_MESSAGES)
+        art = random.choice(CRITICAL_ART)
+        theme_msg = f"{theme_msg}\n```\n{art}\n```"
+        emoji = "\U0001f534"
+    elif severity == "info":
+        color = 3447003
+        theme_msg = random.choice(INFO_MESSAGES)
+        emoji = "\U0001f535"
+    else:
+        color = 16744448
+        theme_msg = random.choice(WARNING_MESSAGES)
+        emoji = "\U0001f7e0"
+
+    count = len(alerts)
+    title = f"{emoji} {group_status.upper()} ({count}) {alertname} [{severity}]"
+
+    lines = []
+    for alert in alerts:
+        labels = alert.get("labels", {})
+        annotations = alert.get("annotations", {})
+
+        # Prefer description over summary for specifics
+        desc = annotations.get("description", "")
+        summary = annotations.get("summary", "")
+        instance = labels.get("instance", "")
+        addr = labels.get("target_address", "")
+
+        # K8s context labels
+        ns = labels.get("namespace", "")
+        pod = labels.get("pod", "")
+        container = labels.get("container", "")
+        node = labels.get("node", "")
+        statefulset = labels.get("statefulset", "")
+        daemonset = labels.get("daemonset", "")
+        deployment = labels.get("deployment", "")
+        reason = labels.get("reason", "")
+        playbook = labels.get("playbook", "")
+        failed_hosts = labels.get("failed_hosts", "")
+        changed_hosts = labels.get("changed_hosts", "")
+
+        # Primary line: description has pod/ns detail, summary is generic
+        label = desc or summary or instance or "unknown"
+
+        # Context tags
+        ctx = []
+        if ns and pod:
+            ctx.append(f"`{ns}/{pod}`")
+            if container:
+                ctx.append(f"container: `{container}`")
+        elif ns:
+            workload = statefulset or daemonset or deployment
+            if workload:
+                ctx.append(f"`{ns}/{workload}`")
+            else:
+                ctx.append(f"ns: `{ns}`")
+        if node:
+            ctx.append(f"node: `{node}`")
+        if reason:
+            ctx.append(f"reason: `{reason}`")
+        if playbook:
+            ctx.append(f"playbook: `{playbook}`")
+        if failed_hosts and failed_hosts != "none":
+            ctx.append(f"failed: `{failed_hosts}`")
+        if changed_hosts and changed_hosts != "none":
+            ctx.append(f"changed: `{changed_hosts}`")
+        if addr and addr != instance and not ctx:
+            ctx.append(f"`{addr}`")
+
+        line = f"\u2022 {label}"
+        if ctx:
+            line += f"\n  \u2514 " + " \u2502 ".join(ctx)
+        lines.append(line)
+    alert_list = "\n".join(lines)
+
+    description = f"{theme_msg}\n\n{alert_list}"
+
+    return {
+        "title": title[:256],
+        "description": description[:4096],
+        "color": color,
+    }
+
+@asynccontextmanager
+async def lifespan(app):
+    app.state.client = httpx.AsyncClient(timeout=10)
+    yield
+    await app.state.client.aclose()
+
+app = FastAPI(lifespan=lifespan)
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    payload = await request.json()
+    alerts = payload.get("alerts", [])
+    if not alerts:
+        return {"status": "ok"}
+
+    key = group_key(payload)
+    embed = build_embed(payload)
+    group_status = payload.get("status", "firing")
+    client = request.app.state.client
+
+    existing_msg_id = message_store.get(key)
+
+    if existing_msg_id:
+        # Try to edit the existing message
+        resp = await client.patch(
+            f"{DISCORD_WEBHOOK_URL}/messages/{existing_msg_id}",
+            json={"embeds": [embed]},
+        )
+        if resp.status_code == 429:
+            retry_after = resp.json().get("retry_after", 1)
+            await asyncio.sleep(retry_after)
+            resp = await client.patch(
+                f"{DISCORD_WEBHOOK_URL}/messages/{existing_msg_id}",
+                json={"embeds": [embed]},
+            )
+        # If edit succeeded, clean up on resolved
+        if resp.status_code < 400:
+            if group_status == "resolved":
+                message_store.pop(key, None)
+            return {"status": "ok"}
+        # If message was deleted (404), fall through to post a new one
+        if resp.status_code != 404:
+            return JSONResponse(
+                status_code=502,
+                content={"status": "error", "discord_status": resp.status_code},
+            )
+
+    # Post a new message (with ?wait=true to get the message ID back)
+    resp = await client.post(
+        f"{DISCORD_WEBHOOK_URL}?wait=true",
+        json={"embeds": [embed]},
+    )
+    if resp.status_code == 429:
+        retry_after = resp.json().get("retry_after", 1)
+        await asyncio.sleep(retry_after)
+        resp = await client.post(
+            f"{DISCORD_WEBHOOK_URL}?wait=true",
+            json={"embeds": [embed]},
+        )
+    if resp.status_code >= 400:
+        return JSONResponse(
+            status_code=502,
+            content={"status": "error", "discord_status": resp.status_code},
+        )
+
+    msg_id = resp.json().get("id")
+    if msg_id and group_status != "resolved":
+        message_store[key] = msg_id
+
+    return {"status": "ok"}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=9095)
