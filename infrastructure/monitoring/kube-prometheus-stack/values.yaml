@@ -335,13 +335,24 @@ kube-prometheus-stack:
                   and on(id, instance)
                   (pve_onboot_status{job="proxmox"} == 1)
                 )
-                * on(id, instance) group_left(name, node)
-                (pve_guest_info{job="proxmox", template="0"})
+                * on(id, instance) group_left(name, node, tags)
+                (pve_guest_info{job="proxmox", template="0", tags!~".*(no-alert|maintenance).*"})
               for: 5m
               labels:
                 severity: warning
               annotations:
                 summary: "{{ $labels.name }} ({{ $labels.id }})"
+                description: |
+                  VM {{ $labels.name }} ({{ $labels.id }}) on {{ $labels.node }} has onboot=1 but is not running. Tag the VM with 'no-alert' (permanent) or 'maintenance' (temporary) in Proxmox to silence this alert.
+            - alert: PveGuestMaintenanceTagStale
+              expr: |
+                pve_guest_info{job="proxmox", template="0", tags=~".*maintenance.*"}
+              for: 24h
+              labels:
+                severity: info
+              annotations:
+                summary: "{{ $labels.name }} still tagged 'maintenance' after 24h"
+                description: "VM {{ $labels.name }} ({{ $labels.id }}) on {{ $labels.node }} has been tagged 'maintenance' for over 24 hours. Remove the tag if the maintenance window is over, otherwise this VM is silently excluded from PveGuestDown alerts."
             - alert: PveQuorumDegraded
               expr: pve_cluster_quorum_total_votes{job="vm-node-exporter"} < pve_cluster_quorum_expected_votes{job="vm-node-exporter"}
               for: 2m
