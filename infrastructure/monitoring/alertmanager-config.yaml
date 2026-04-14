@@ -35,7 +35,10 @@ stringData:
       routes:
         - matchers:
             - alertname = "Watchdog"
-          receiver: "null"
+          receiver: healthchecks
+          group_wait: 0s
+          group_interval: 1m
+          repeat_interval: 2m
         - matchers:
             - alertname =~ "InfoInhibitor|KubeVersionMismatch"
           receiver: "null"
@@ -84,3 +87,8 @@ stringData:
         webhook_configs:
           - send_resolved: true
             url: "http://discord-alert-proxy.monitoring.svc:9095/webhook"
+      - name: healthchecks
+        webhook_configs:
+          - send_resolved: false
+            url_file: /etc/alertmanager/secrets/healthchecks-watchdog/url
+            max_alerts: 0

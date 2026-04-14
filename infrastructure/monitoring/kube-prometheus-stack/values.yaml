@@ -138,6 +138,8 @@ kube-prometheus-stack:
     alertmanagerSpec:
       replicas: 2
       configSecret: alertmanager-custom-config
+      secrets:
+        - healthchecks-watchdog
       podAntiAffinity: "soft"
       podDisruptionBudget:
         enabled: true
