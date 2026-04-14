@@ -45,11 +45,11 @@ spec:
                     app: discord-alert-proxy
       containers:
         - name: proxy
-          image: python:3.12-slim
-          command:
-            - sh
-            - -c
-            - pip install --no-cache-dir fastapi uvicorn httpx && python /app/proxy.py
+          # Baked image (see Dockerfile + requirements.txt in this dir),
+          # pinned by SHA tag so rollouts are deterministic. A refresh is
+          # a new SHA tag + bump of this line via the build workflow.
+          image: ghcr.io/mithr4ndir/discord-alert-proxy:c8a27162e0e0
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 9095
           env:
@@ -58,9 +58,6 @@ spec:
                 secretKeyRef:
                   name: discord-webhook-url
                   key: webhook-url
-          volumeMounts:
-            - name: proxy-script
-              mountPath: /app
           resources:
             requests:
               memory: 64Mi
@@ -80,7 +77,3 @@ spec:
               port: 9095
             initialDelaySeconds: 15
             periodSeconds: 10
-      volumes:
-        - name: proxy-script
-          configMap:
-            name: discord-alert-proxy-script
