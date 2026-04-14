@@ -16,6 +16,13 @@ on:
       - "infrastructure/monitoring/discord-alert-proxy/requirements.txt"
       - "infrastructure/monitoring/discord-alert-proxy/.dockerignore"
       - ".github/workflows/build-discord-alert-proxy.yml"
+  # Weekly rebuild even when nothing changed in git. Picks up new
+  # python:3.12-slim digests (Debian security updates) so the image
+  # does not drift stale. Also re-runs the Trivy scan on the stored
+  # bits so newly disclosed CVEs fail the build even before
+  # Dependabot opens a bump PR.
+  schedule:
+    - cron: "0 13 * * 1"
   workflow_dispatch:
 
 concurrency:
@@ -25,6 +32,9 @@ concurrency:
 permissions:
   contents: read
   packages: write
+  # Required for the Trivy scan to upload SARIF results to the
+  # repo's Security tab (Code scanning alerts).
+  security-events: write
 
 jobs:
   build:
@@ -37,7 +47,12 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        # Authenticate for every event that pushes (push to main,
+        # workflow_dispatch, AND schedule). The build step's push
+        # condition is `github.event_name != 'pull_request'`, so login
+        # must match the same condition; otherwise scheduled rebuilds
+        # try to push anonymously and fail with a 401.
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -49,16 +64,52 @@ jobs:
         run: |
           SHORT_SHA=$(git rev-parse --short=12 HEAD)
           echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          # Stamp scheduled / manual rebuilds so the image record in
+          # GHCR is traceable (base image may differ even when git HEAD
+          # did not change).
+          STAMP="$(date -u +%Y%m%d)"
+          echo "stamp=${STAMP}" >> "$GITHUB_OUTPUT"
 
-      - name: Build and (on main) push
+      - name: Build (always) and push (on main, dispatch, or schedule)
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: infrastructure/monitoring/discord-alert-proxy
           file: infrastructure/monitoring/discord-alert-proxy/Dockerfile
           platforms: linux/amd64
-          push: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+          load: ${{ github.event_name == 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/discord-alert-proxy:${{ steps.tags.outputs.short_sha }}
             ghcr.io/${{ github.repository_owner }}/discord-alert-proxy:latest
+            ghcr.io/${{ github.repository_owner }}/discord-alert-proxy:${{ steps.tags.outputs.stamp }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Scan image with Trivy (fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/discord-alert-proxy:${{ steps.tags.outputs.short_sha }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+
+      - name: Run Trivy again to produce SARIF for Code Scanning
+        if: always()
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/discord-alert-proxy:${{ steps.tags.outputs.short_sha }}
+          format: sarif
+          output: trivy-results.sarif
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+
+      - name: Upload Trivy SARIF to GitHub Security tab
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-discord-alert-proxy

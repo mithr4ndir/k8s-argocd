@@ -1,0 +1,53 @@
+version: 2
+
+updates:
+  # Pinned Python deps baked into the discord-alert-proxy image.
+  # A new fastapi/uvicorn/httpx CVE surfaces as an auto-PR here.
+  - package-ecosystem: pip
+    directory: /infrastructure/monitoring/discord-alert-proxy
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - monitoring
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+  # Base image tag in the Dockerfile. When a new python:3.12-slim
+  # digest ships (Debian security update), Dependabot opens a PR.
+  - package-ecosystem: docker
+    directory: /infrastructure/monitoring/discord-alert-proxy
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - monitoring
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+  # GitHub Actions used by our workflows. Catches supply-chain
+  # pinning in docker/build-push-action, actions/checkout, etc.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
+    commit-message:
+      prefix: "chore(ci)"
+      include: scope
