@@ -89,6 +89,11 @@ stringData:
             url: "http://discord-alert-proxy.monitoring.svc:9095/webhook"
       - name: healthchecks
         webhook_configs:
+          # HC.io expects ping requests (any GET/POST to the ping URL
+          # is a liveness signal). send_resolved: true would cause
+          # AlertManager to POST a resolved-alert JSON body that HC.io
+          # does not interpret, and can show as a failed ping in the
+          # event log. Keep this false.
           - send_resolved: false
             url_file: /etc/alertmanager/secrets/healthchecks-watchdog/url
             max_alerts: 0
