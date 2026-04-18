@@ -144,9 +144,9 @@ data:
               key: "{{HOMEPAGE_VAR_JELLYSEERR_KEY}}"
         - NZBGet:
             icon: nzbget.png
-            href: http://192.168.1.226:10057
+            href: http://192.168.1.226:6789
             description: Usenet downloader
-            siteMonitor: http://192.168.1.226:10057
+            siteMonitor: http://192.168.1.226:6789
         - qBittorrent:
             icon: qbittorrent.png
             href: http://192.168.1.226:8080
@@ -177,7 +177,7 @@ data:
             siteMonitor: http://192.168.1.171:5601
         - Alertmanager:
             icon: alertmanager.png
-            href: http://192.168.1.230:9093
+            href: http://alertmanager-external.monitoring.svc:9093
             description: Alert routing to Discord
 
     - Temperatures:

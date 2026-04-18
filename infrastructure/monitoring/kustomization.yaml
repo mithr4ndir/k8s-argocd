@@ -2,6 +2,7 @@ resources:
   - namespace.yaml
   - application.yaml
   - prometheus-external-svc.yaml
+  - alertmanager-external-svc.yaml
   - alertmanager-config.yaml
   - loki-external-svc.yaml
   - vector-aggregator-svc.yaml
