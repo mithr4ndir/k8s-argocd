@@ -572,7 +572,10 @@ kube-prometheus-stack:
                 summary: "{{ $labels.deployment }} has been down for 5 minutes"
                 description: "Deployment {{ $labels.deployment }} in namespace {{ $labels.namespace }} has 0 available replicas. The service is completely offline."
             - alert: MediaPodCrashLooping
-              expr: increase(kube_pod_container_status_restarts_total{namespace="media"}[1h]) > 5
+              expr: |
+                increase(kube_pod_container_status_restarts_total{namespace="media"}[1h]) > 5
+                and on (namespace, pod)
+                kube_pod_status_phase{namespace="media", phase="Running"} == 1
               for: 10m
               labels:
                 severity: warning
