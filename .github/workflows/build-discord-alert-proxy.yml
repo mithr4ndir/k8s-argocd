@@ -72,7 +72,7 @@ jobs:
 
       - name: Build (always) and push (on main, dispatch, or schedule)
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: infrastructure/monitoring/discord-alert-proxy
           file: infrastructure/monitoring/discord-alert-proxy/Dockerfile
