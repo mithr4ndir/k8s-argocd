@@ -74,9 +74,15 @@ spec:
         fsGroup: 65534
         seccompProfile:
           type: RuntimeDefault
+      volumes:
+        - name: tmp
+          emptyDir: {}
       containers:
         - name: kubectl
           image: bitnami/kubectl:1.31
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           command:
             - /bin/sh
             - -c
