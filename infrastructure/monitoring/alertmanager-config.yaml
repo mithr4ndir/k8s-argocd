@@ -78,6 +78,12 @@ stringData:
           group_wait: 1m
           repeat_interval: 2h
         - matchers:
+            - namespace = "media"
+          receiver: discord
+          group_by: [alertname]
+          group_wait: 1m
+          repeat_interval: 1h
+        - matchers:
             - severity = critical
           receiver: discord
           repeat_interval: 1h

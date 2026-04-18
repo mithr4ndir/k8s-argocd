@@ -556,6 +556,46 @@ kube-prometheus-stack:
                 summary: "Security enforcement hasn't run in over 1 hour on {{ $labels.instance }}"
                 description: "Last security timer run was {{ $value | humanizeDuration }} ago on {{ $labels.instance }}. Wazuh/CrowdSec config enforcement is not converging."
 
+    media-service-health:
+      groups:
+        - name: media-services
+          rules:
+            - alert: MediaDeploymentUnavailable
+              expr: |
+                kube_deployment_status_replicas_available{namespace="media"} == 0
+                and
+                kube_deployment_spec_replicas{namespace="media"} > 0
+              for: 5m
+              labels:
+                severity: critical
+              annotations:
+                summary: "{{ $labels.deployment }} has been down for 5 minutes"
+                description: "Deployment {{ $labels.deployment }} in namespace {{ $labels.namespace }} has 0 available replicas. The service is completely offline."
+            - alert: MediaPodCrashLooping
+              expr: |
+                increase(kube_pod_container_status_restarts_total{namespace="media"}[1h]) > 5
+                and on (namespace, pod)
+                kube_pod_status_phase{namespace="media", phase="Running"} == 1
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "{{ $labels.pod }} is crash-looping ({{ $value | printf \"%.0f\" }} restarts/hr)"
+                description: "Container {{ $labels.container }} in pod {{ $labels.pod }} has restarted more than 5 times in the last hour. Check logs with: kubectl logs -n media {{ $labels.pod }} -c {{ $labels.container }} --previous"
+            - alert: MediaPodNotReady
+              expr: |
+                min by (namespace, pod) (
+                  kube_pod_status_ready{namespace="media", condition="true"}
+                ) == 0
+                and on (namespace, pod)
+                kube_pod_status_phase{namespace="media", phase="Running"} == 1
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "{{ $labels.pod }} not ready for 10+ minutes"
+                description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been running but not ready for over 10 minutes. Readiness probes may be failing."
+
   # Prometheus Operator
   prometheusOperator:
     enabled: true
