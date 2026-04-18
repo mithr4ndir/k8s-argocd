@@ -13,7 +13,12 @@ spec:
     - name: dask-availability
       rules:
         - alert: DaskSchedulerDown
-          expr: absent(up{job="dask-scheduler"} == 1)
+          # The scrape target in this cluster is named after the K8s
+          # service (lsdb-cluster-scheduler), not the generic
+          # dask-scheduler. The old rule matched zero series, so
+          # absent() returned 1 unconditionally and the alert fired
+          # permanently. Anchor on the real job label.
+          expr: absent(up{job="lsdb-cluster-scheduler"} == 1)
           for: 5m
           labels:
             severity: critical
@@ -21,13 +26,18 @@ spec:
             summary: "Dask scheduler is down"
             description: "The Dask scheduler (lsdb-cluster) has been unreachable for 5 minutes. No computations can be submitted."
         - alert: DaskNoWorkers
-          expr: dask_scheduler_workers == 0
+          # dask_scheduler_workers is dimensioned by state (idle,
+          # saturated, partially_saturated, paused, retiring). With one
+          # idle worker, idle=1 and the other four states=0, which made
+          # the old `== 0` rule fire four times permanently. Sum across
+          # states to get the actual worker count, per scheduler pod.
+          expr: sum by (namespace, pod) (dask_scheduler_workers) == 0
           for: 5m
           labels:
             severity: critical
           annotations:
             summary: "Dask cluster has no workers"
-            description: "The Dask cluster (lsdb-cluster) has had 0 workers for 5 minutes. Submitted tasks cannot execute."
+            description: "The Dask cluster ({{ $labels.namespace }}/{{ $labels.pod }}) has had 0 workers for 5 minutes. Submitted tasks cannot execute."
     - name: dask-resources
       rules:
         - alert: DaskWorkerOOM
