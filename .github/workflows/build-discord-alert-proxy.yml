@@ -87,7 +87,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Scan image with Trivy (fail on HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/discord-alert-proxy:${{ steps.tags.outputs.short_sha }}
           format: table
@@ -98,7 +98,7 @@ jobs:
 
       - name: Run Trivy again to produce SARIF for Code Scanning
         if: always()
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/discord-alert-proxy:${{ steps.tags.outputs.short_sha }}
           format: sarif
