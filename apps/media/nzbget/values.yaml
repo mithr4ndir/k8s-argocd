@@ -1,6 +1,6 @@
 image:
   repository: lscr.io/linuxserver/nzbget
-  tag: "latest"
+  tag: "v25.3-ls212"
   pullPolicy: IfNotPresent
 
 imagePullSecrets:
