@@ -4,7 +4,7 @@ resources:
   - media-pv-nfs.yaml
   - media-pvc.yaml
   - jellyfin-external-svc.yaml
-  - jellyfin-external-ep.yaml
+  - jellyfin-endpoints-hook.yaml
   - nzbget/
   - qbittorrent/
   - radarr/
