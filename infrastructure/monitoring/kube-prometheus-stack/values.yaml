@@ -70,6 +70,12 @@ kube-prometheus-stack:
     # PostgreSQL password from ExternalSecret
     envFromSecret: grafana-secrets
 
+    # Auto-restart Grafana when the grafana-secrets Secret changes
+    # (e.g. after a 1Password rotation + ESO re-sync). Without this,
+    # Grafana keeps running with stale env vars until manual restart.
+    podAnnotations:
+      reloader.stakater.com/auto: "true"
+
     # Plugins
     plugins:
       - grafana-opensearch-datasource
@@ -404,6 +410,27 @@ kube-prometheus-stack:
               annotations:
                 summary: "PVE storage {{ $labels.id }} > 85%"
                 description: "Proxmox storage {{ $labels.id }} is above 85% capacity."
+
+    etcd-health:
+      groups:
+        - name: etcd-database
+          rules:
+            - alert: EtcdDbSizeLarge
+              expr: etcd_mvcc_db_total_size_in_bytes > 100e6
+              for: 1h
+              labels:
+                severity: warning
+              annotations:
+                summary: "etcd db {{ $labels.pod }} is {{ $value | humanize1024 }}"
+                description: "etcd member {{ $labels.pod }} has a database larger than 100MB for over 1 hour. Run compaction + defragmentation to reclaim space before the db causes leader election instability. See 2026-04-18 RCA."
+            - alert: EtcdDbSizeCritical
+              expr: etcd_mvcc_db_total_size_in_bytes > 200e6
+              for: 15m
+              labels:
+                severity: critical
+              annotations:
+                summary: "etcd db {{ $labels.pod }} is {{ $value | humanize1024 }} (critical)"
+                description: "etcd member {{ $labels.pod }} has a database larger than 200MB. This caused controller-manager crash-loops in the 2026-04-18 incident at 124MB. Immediate compaction + defrag required."
 
     wazuh-health:
       groups:
