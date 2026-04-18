@@ -91,6 +91,50 @@ Look at Grafana **1Password Quota** dashboard, "24h account usage" panel for the
 | `CollectorStale` alone (no quota alert) | Collector script itself failed. Token unreadable, `op` missing, kill switch tripped but not cleared | `journalctl -t op-quota-collector -n 50` |
 | `QuotaLow` but `reset` says 23 hours | Someone just started the window with a burst. Will resolve as the window slides or when they stop | Watch for 1 hour. If slope stays flat/decreasing, ignore |
 
+## ExternalSecret Retry Alerts
+
+Applies to: `ExternalSecretNotReady`, `ExternalSecretSyncErrorBurst`.
+
+These fire **upstream** of the quota alerts above. They catch the retry loop at its source (a broken ExternalSecret reference) before it drains enough quota to trip `OnePasswordQuotaLow`. If one of these fires, the account cap is probably still healthy but an ES is actively consuming it.
+
+### Triage
+
+```bash
+# See which ES is failing and the upstream error message
+kubectl describe externalsecret -n "$NS" "$NAME"
+
+# Check the ESO controller logs for the specific reconcile error
+kubectl logs -n external-secrets deploy/external-secrets --tail=100 | grep -i "$NAME"
+
+# Confirm the referenced 1Password item / field still exists
+OP_SERVICE_ACCOUNT_TOKEN="$(cat ~/.config/op/service-account-token)" \
+  op item get "<item-id>" --vault "<vault>" 2>&1 | head
+```
+
+### Common root causes
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `item not found` in ESO logs | Referenced 1P item was deleted or moved vaults | Update the `remoteRef.key` in the ES spec, or recreate the item |
+| `field not found` | Field renamed in the 1P item | Update `remoteRef.property` to match the current field name |
+| `unauthorized` / `401` | Service account lost access to the vault | Re-grant vault access to the SA in 1P admin, or rotate the token |
+| `429 Too Many Requests` in logs, condition flaps | 1P cap is already exhausted AND ESO is looping | Trip the kill switch (above), scale ESO to 0, wait for reset |
+
+### Immediate containment if you can't fix the reference right now
+
+Stop the retry loop by disabling the failing ES until you can fix it:
+
+```bash
+# Annotate to prevent reconcile (ESO respects this)
+kubectl annotate externalsecret -n "$NS" "$NAME" \
+  external-secrets.io/reconcile-paused="true" --overwrite
+
+# Or delete the target Secret so at least the downstream workload fails loudly
+kubectl delete secret -n "$NS" "$TARGET_SECRET_NAME"
+```
+
+Un-pause with `kubectl annotate ... external-secrets.io/reconcile-paused-` once fixed.
+
 ## Related
 
 - RCA: `k8s-argocd/2026-04-18_etcd_instability_rca.md` (memory bank) includes the parallel 1P incident.

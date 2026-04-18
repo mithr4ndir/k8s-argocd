@@ -432,6 +432,36 @@ kube-prometheus-stack:
                 summary: "etcd db {{ $labels.pod }} is {{ $value | humanize1024 }} (critical)"
                 description: "etcd member {{ $labels.pod }} has a database larger than 200MB. This caused controller-manager crash-loops in the 2026-04-18 incident at 124MB. Immediate compaction + defrag required."
 
+    external-secrets-health:
+      groups:
+        - name: external-secrets-sync
+          rules:
+            # Catch ExternalSecret retry loops BEFORE they drain the 1Password
+            # daily cap. ESO retries on error with ~6min backoff regardless of
+            # refreshInterval, so a single bad reference can chew 200+/day.
+            # This alert fires within 10m of the first failed sync, vs
+            # OnePasswordQuotaLow which only fires after 800+ reads consumed.
+            - alert: ExternalSecretNotReady
+              expr: externalsecret_status_condition{condition="Ready",status="False"} == 1
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "ExternalSecret {{ $labels.namespace }}/{{ $labels.name }} not ready"
+                description: "ExternalSecret {{ $labels.namespace }}/{{ $labels.name }} has been Ready=False for 10m. ESO is retrying on backoff and will burn 1Password quota until the reference is fixed or the ES is deleted. Check `kubectl describe externalsecret -n {{ $labels.namespace }} {{ $labels.name }}` for the upstream error."
+                runbook_url: "https://github.com/mithr4ndir/k8s-argocd/blob/main/docs/runbooks/onepassword-quota.md#externalsecret-retry-alerts"
+            # Active retry loop: >3 errors in 15min = ~12/hr = 288/day from one
+            # bad ES alone = 28% of the 1P daily cap per broken reference.
+            - alert: ExternalSecretSyncErrorBurst
+              expr: sum by (namespace, name) (increase(externalsecret_sync_calls_error[15m])) > 3
+              for: 5m
+              labels:
+                severity: warning
+              annotations:
+                summary: "ExternalSecret {{ $labels.namespace }}/{{ $labels.name }} sync errors: {{ $value | printf \"%.0f\" }}/15m"
+                description: "ExternalSecret {{ $labels.namespace }}/{{ $labels.name }} has produced more than 3 sync errors in the last 15 minutes. This is an active retry loop that will exhaust the 1Password daily cap if left for ~4 hours. Fix the upstream reference or delete the ES."
+                runbook_url: "https://github.com/mithr4ndir/k8s-argocd/blob/main/docs/runbooks/onepassword-quota.md#externalsecret-retry-alerts"
+
     onepassword-quota:
       groups:
         - name: onepassword-quota
