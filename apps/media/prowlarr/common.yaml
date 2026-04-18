@@ -94,8 +94,8 @@ spec:
             value: America/Los_Angeles
           - name: UMASK
             value: "002"
-          image: lscr.io/linuxserver/prowlarr:latest
-          imagePullPolicy: Always
+          image: lscr.io/linuxserver/prowlarr:2.3.5.5327-ls142
+          imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
               path: /
