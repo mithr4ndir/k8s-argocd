@@ -10,7 +10,7 @@ controllers:
       main:
         image:
           repository: fallenbagel/jellyseerr
-          tag: latest
+          tag: "2.7.3"
           pullPolicy: IfNotPresent
         securityContext:
           runAsUser: 0

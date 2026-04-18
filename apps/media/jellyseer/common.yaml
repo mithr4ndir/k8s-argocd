@@ -94,7 +94,7 @@ spec:
             value: America/Los_Angeles
           - name: UMASK
             value: "002"
-          image: fallenbagel/jellyseerr:latest
+          image: fallenbagel/jellyseerr:2.7.3
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:

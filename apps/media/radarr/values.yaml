@@ -12,8 +12,8 @@ controllers:
       main:
         image:
           repository: lscr.io/linuxserver/radarr
-          tag: latest
-          pullPolicy: Always
+          tag: "6.1.1.10360-ls299"
+          pullPolicy: IfNotPresent
         securityContext:
           runAsUser: 0
           runAsGroup: 0

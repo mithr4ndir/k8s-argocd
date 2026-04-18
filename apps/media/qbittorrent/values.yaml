@@ -10,7 +10,7 @@ controllers:
       main:
         image:
           repository: lscr.io/linuxserver/qbittorrent
-          tag: latest
+          tag: "5.1.4-r3-ls450"
           pullPolicy: IfNotPresent
         securityContext:
           runAsUser: 0

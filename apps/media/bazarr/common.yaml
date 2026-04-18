@@ -94,8 +94,8 @@ spec:
             value: America/Los_Angeles
           - name: UMASK
             value: "002"
-          image: lscr.io/linuxserver/bazarr:latest
-          imagePullPolicy: Always
+          image: lscr.io/linuxserver/bazarr:v1.5.6-ls344
+          imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
               path: /

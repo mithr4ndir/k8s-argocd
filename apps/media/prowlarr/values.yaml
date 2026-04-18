@@ -12,8 +12,8 @@ controllers:
       main:
         image:
           repository: lscr.io/linuxserver/prowlarr
-          tag: latest
-          pullPolicy: Always
+          tag: "2.3.5.5327-ls142"
+          pullPolicy: IfNotPresent
         securityContext:
           runAsUser: 0
           runAsGroup: 0
