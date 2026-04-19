@@ -1,0 +1,30 @@
+---
+# LoadBalancer Service for the Dask scheduler dashboard.
+#
+# Replaces the prior Ingress resource which depended on an nginx
+# IngressController that was never installed in the cluster (the Ingress
+# had no backing LB and ArgoCD dev sync blocked on it indefinitely).
+#
+# Selector matches the operator-managed scheduler pods for the
+# lsdb-cluster DaskCluster. The scheduler pod exposes the dashboard on
+# port 8787 and the dask comms protocol on 8786. We expose only 8787 on
+# the LB; internal workers continue to talk to the operator-managed
+# ClusterIP service for 8786.
+apiVersion: v1
+kind: Service
+metadata:
+  name: dask-dashboard
+  namespace: science
+  annotations:
+    argocd.argoproj.io/sync-wave: '3'
+    metallb.universe.tf/loadBalancerIPs: 192.168.1.234
+spec:
+  type: LoadBalancer
+  selector:
+    dask.org/cluster-name: lsdb-cluster
+    dask.org/component: scheduler
+  ports:
+    - name: http-dashboard
+      port: 8787
+      targetPort: 8787
+      protocol: TCP
