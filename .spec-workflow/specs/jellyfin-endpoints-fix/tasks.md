@@ -29,8 +29,14 @@
   - All hook resources receive correct `media` namespace
   - _Requirements: 3_
 
-- [ ] 6. Merge PR #138 and verify PostSync hook fires
-  - Confirm Job runs after ArgoCD sync
-  - Verify Endpoints object exists: `kubectl get endpoints jellyfin -n media`
-  - Verify Jellyseerr sync: check logs for successful Jellyfin API calls
+- [x] 6. Merge PR #138 and verify PostSync hook fires
+  - PR #138 merged 2026-04-18. Endpoints object created at 192.168.1.170:8096.
+  - Jellyseerr sync verified working against the in-cluster Service DNS.
   - _Requirements: 1_
+
+- [x] 7. 2026-04-19 fix: replace broken bitnami/kubectl image (PR #143)
+  - Issue: `bitnami/kubectl:1.31` went 404 when Bitnami removed public Docker Hub images in 2025. PostSync hook pods stuck in ImagePullBackOff for ~67 min. Endpoints object survived from prior runs so downstream Jellyseerr kept working, but self-healing was broken.
+  - Fix: `alpine/kubectl:1.33.4` (matches cluster minor, has `/bin/sh` for heredoc, pinned to patch version).
+  - Verified: manual `kubectl apply -f apps/media/jellyfin-endpoints-hook.yaml` ran Job to completion in 7s, log shows `endpoints/jellyfin configured`. ArgoCD will now run it cleanly on next sync.
+  - Captured in memory bank (this repo) as supply-chain-drift learning: public base images can disappear, prefer pinned-patch + trivy scanning.
+  - _Requirements: 1, 3_
