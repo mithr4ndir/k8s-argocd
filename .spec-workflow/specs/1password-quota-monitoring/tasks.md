@@ -77,11 +77,26 @@ Status update 2026-04-18: tasks 1-4 (ansible-quasarlab collector) shipped as PR 
   - _Leverage: recent monitoring PRs (#132 etcd alerts) as the PR shape_
   - _Requirements: all (this is the delivery vehicle)_
 
-- [ ] 9. End-to-end smoke test after both repos' PRs merge
-  - Verify: `kubectl exec prom -- wget ... query=onepassword_ratelimit_used` returns live data
-  - Verify: Grafana panel renders
-  - Verify: temporarily raise a threshold, confirm Discord receives themed alert, revert
-  - Verify: trip the kill switch, confirm `CollectorStale` fires after 30 min
-  - Purpose: Prove the full pipeline works end-to-end
+- [~] 9. End-to-end smoke test after both repos' PRs merge (partial, blocked on collector deployment)
+  - [x] ArgoCD dev app adopted the Grafana dashboard ConfigMap cleanly
+  - [x] PrometheusRule groups `onepassword-quota` (7 alerts) and `external-secrets-health` (2 alerts) deployed and visible in Prometheus UI
+  - [x] 3 ExternalSecrets ServiceMonitors deployed via chart `serviceMonitor.enabled=true, renderMode=alwaysRender`
+  - [ ] Live `onepassword_ratelimit_*` metrics in Prometheus. Blocked on ansible-quasarlab deploying the op-ratelimit-collector via `cmd_center.yml --tags op_ratelimit_collector`. Will not land until 1P cap recovers (stuck at ~100/1000 remaining on 2026-04-19 after an ansible retry storm).
+  - [ ] Threshold-flip Discord smoke test. Can run immediately (rule deploys independent of metric data) but deferred until real metric flow so the alert fires on authentic condition, not synthetic.
+  - [ ] `OnePasswordQuotaCollectorStale` for-30m test. Requires collector deployed + running briefly, then kill-switch tripped.
   - _Leverage: kubectl exec pattern already used for other monitoring validation_
   - _Requirements: all acceptance criteria, integration testing per design doc_
+
+- [ ] 10. 2026-04-19 follow-up: second round of alerts for ESO retry-loop detection (shipped in same PR #140)
+  - [x] ExternalSecretNotReady (warning, 10m on `externalsecret_status_condition{Ready,False}==1`)
+  - [x] ExternalSecretSyncErrorBurst (warning, 5m on `increase(externalsecret_sync_calls_error[15m]) > 3`)
+  - [x] Runbook extended with ExternalSecret Retry Alerts section (triage, root-cause table, reconcile-paused containment)
+  - [x] Per-SA hourly token tier alerts added: OnePasswordTokenReadHourlyLow (<200/1000) and OnePasswordTokenWriteHourlyLow (<20/100)
+  - _Leverage: ESO chart native ServiceMonitor, existing runbook_
+  - _Requirements: defense-in-depth on the incident class that bit us on 2026-04-18_
+
+- [x] 11. 2026-04-19 learning: confirm `op service-account ratelimit` is a free control-plane call
+  - Previous assumption: every ratelimit probe costs 1 read, hence collector 15m cadence (96/day = 9.6% of 1000 cap)
+  - Verified against a draining cap: USED counter stayed flat across back-to-back probes
+  - Implication: tighten collector cadence to 5m (PR #121 in ansible-quasarlab); remove "costs a read" warnings from runbook
+  - Auto-memory updated at `~/.claude/projects/-home-ladino/memory/feedback_op_rate_limit_care.md`
