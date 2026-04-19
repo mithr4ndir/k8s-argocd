@@ -79,7 +79,11 @@ spec:
           emptyDir: {}
       containers:
         - name: kubectl
-          image: bitnami/kubectl:1.31
+          # Bitnami removed public Docker Hub images in 2025; bitnami/kubectl:1.31
+          # now 404s. alpine/kubectl matches cluster minor (v1.33.11) and has the
+          # shell this Job's heredoc needs. Pin to patch version so supply-chain
+          # scans flag tag drift.
+          image: alpine/kubectl:1.33.4
           volumeMounts:
             - name: tmp
               mountPath: /tmp
