@@ -2,6 +2,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - grafana-dashboard-1password-quota.yaml
   - grafana-dashboard-ansible-ansible-runs.yaml
   - grafana-dashboard-kubernetes-cluster-overview.yaml
   - grafana-dashboard-kubernetes-k8s-logs.yaml

@@ -18,3 +18,17 @@ external-secrets:
   # Limit concurrent reconciles to prevent retry storms from
   # overwhelming upstream secret providers (1Password, Vault, etc.)
   concurrent: 1
+
+  # ServiceMonitor so kube-prometheus-stack scrapes ESO metrics.
+  # Needed so ExternalSecretSyncError alerts fire on retry loops
+  # before they drain the 1Password daily cap (2026-04-18 incident).
+  # `release: kube-prometheus-stack` matches Prometheus operator's
+  # serviceMonitorSelector in the monitoring namespace.
+  serviceMonitor:
+    enabled: true
+    # alwaysRender: the ServiceMonitor CRD is present via kube-prometheus-stack,
+    # but `helm template` at ArgoCD render time can't detect it with the default
+    # `skipIfMissing` mode, so the SM would silently never deploy. Force render.
+    renderMode: alwaysRender
+    additionalLabels:
+      release: kube-prometheus-stack

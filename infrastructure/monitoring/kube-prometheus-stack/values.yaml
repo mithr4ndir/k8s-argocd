@@ -432,6 +432,114 @@ kube-prometheus-stack:
                 summary: "etcd db {{ $labels.pod }} is {{ $value | humanize1024 }} (critical)"
                 description: "etcd member {{ $labels.pod }} has a database larger than 200MB. This caused controller-manager crash-loops in the 2026-04-18 incident at 124MB. Immediate compaction + defrag required."
 
+    external-secrets-health:
+      groups:
+        - name: external-secrets-sync
+          rules:
+            # Catch ExternalSecret retry loops BEFORE they drain the 1Password
+            # daily cap. ESO retries on error with ~6min backoff regardless of
+            # refreshInterval, so a single bad reference can chew 200+/day.
+            # This alert fires within 10m of the first failed sync, vs
+            # OnePasswordQuotaLow which only fires after 800+ reads consumed.
+            - alert: ExternalSecretNotReady
+              expr: externalsecret_status_condition{condition="Ready",status="False"} == 1
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "ExternalSecret {{ $labels.namespace }}/{{ $labels.name }} not ready"
+                description: "ExternalSecret {{ $labels.namespace }}/{{ $labels.name }} has been Ready=False for 10m. ESO is retrying on backoff and will burn 1Password quota until the reference is fixed or the ES is deleted. Check `kubectl describe externalsecret -n {{ $labels.namespace }} {{ $labels.name }}` for the upstream error."
+                runbook_url: "https://github.com/mithr4ndir/k8s-argocd/blob/main/docs/runbooks/onepassword-quota.md#externalsecret-retry-alerts"
+            # Active retry loop: >3 errors in 15min = ~12/hr = 288/day from one
+            # bad ES alone = 28% of the 1P daily cap per broken reference.
+            - alert: ExternalSecretSyncErrorBurst
+              expr: sum by (namespace, name) (increase(externalsecret_sync_calls_error[15m])) > 3
+              for: 5m
+              labels:
+                severity: warning
+              annotations:
+                summary: "ExternalSecret {{ $labels.namespace }}/{{ $labels.name }} sync errors: {{ $value | printf \"%.0f\" }}/15m"
+                description: "ExternalSecret {{ $labels.namespace }}/{{ $labels.name }} has produced more than 3 sync errors in the last 15 minutes. This is an active retry loop that will exhaust the 1Password daily cap if left for ~4 hours. Fix the upstream reference or delete the ES."
+                runbook_url: "https://github.com/mithr4ndir/k8s-argocd/blob/main/docs/runbooks/onepassword-quota.md#externalsecret-retry-alerts"
+
+    onepassword-quota:
+      groups:
+        - name: onepassword-quota
+          rules:
+            # Account-tier daily cap (Families plan: 1000 reads/day, shared across all service accounts).
+            # The 2026-04-18 incident pinned this for ~24h and silently broke every ExternalSecret sync.
+            # See ansible-quasarlab roles/op_quota_collector for the textfile source.
+            - alert: OnePasswordQuotaHalfConsumed
+              expr: onepassword_ratelimit_remaining{type="account",action="read_write"} < 500
+              for: 15m
+              labels:
+                severity: info
+              annotations:
+                summary: "1Password account quota at 50% ({{ $value }} remaining)"
+                description: "1Password daily account cap has dropped below 500/1000 remaining for 15m. Trend check: identify heaviest consumers before they push us toward critical."
+                runbook_url: "https://github.com/mithr4ndir/k8s-argocd/blob/main/docs/runbooks/onepassword-quota.md"
+            - alert: OnePasswordQuotaLow
+              expr: onepassword_ratelimit_remaining{type="account",action="read_write"} < 200
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "1Password account quota low ({{ $value }} remaining)"
+                description: "1Password daily account cap has dropped below 200/1000 remaining for 10m. Intervene now: pause non-critical automation or widen ESO refresh intervals. Reset in {{ with query \"onepassword_ratelimit_reset_seconds{type='account'}\" }}{{ . | first | value | humanizeDuration }}{{ end }}."
+                runbook_url: "https://github.com/mithr4ndir/k8s-argocd/blob/main/docs/runbooks/onepassword-quota.md"
+            - alert: OnePasswordQuotaCritical
+              expr: onepassword_ratelimit_remaining{type="account",action="read_write"} < 50
+              for: 5m
+              labels:
+                severity: critical
+              annotations:
+                summary: "1Password account quota CRITICAL ({{ $value }} remaining)"
+                description: "1Password daily account cap has dropped below 50/1000 remaining. Secrets are about to stop syncing. Trip the kill switch and scale ESO to 0 until reset."
+                runbook_url: "https://github.com/mithr4ndir/k8s-argocd/blob/main/docs/runbooks/onepassword-quota.md"
+            - alert: OnePasswordQuotaExhausted
+              expr: onepassword_ratelimit_remaining{type="account",action="read_write"} == 0
+              for: 0m
+              labels:
+                severity: critical
+              annotations:
+                summary: "1Password account quota EXHAUSTED"
+                description: "1Password daily account cap is fully consumed. Every `op` call will 429 until reset. ExternalSecret sync is broken. Trip kill switch, scale ESO to 0, wait for reset window."
+                runbook_url: "https://github.com/mithr4ndir/k8s-argocd/blob/main/docs/runbooks/onepassword-quota.md"
+            # Per-service-account hourly limits. Normally the account daily cap
+            # is the binding constraint, but a single SA looping on reads or a
+            # bulk-write script can trip the hourly tier first. Catches the
+            # runaway in ~10-15 min so we can fix the caller before the daily
+            # cap also drains.
+            - alert: OnePasswordTokenReadHourlyLow
+              expr: onepassword_ratelimit_remaining{type="token",action="read"} < 200
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "1Password SA hourly read quota low ({{ $value }} remaining of 1000)"
+                description: "A service account has burned more than 800/1000 hourly reads for 10m. Normal operation is well under 100/hr. Likely cause: runaway loop or cache miss storm on one caller. Identify via `journalctl -t op-wrapper` on command-center1."
+                runbook_url: "https://github.com/mithr4ndir/k8s-argocd/blob/main/docs/runbooks/onepassword-quota.md"
+            - alert: OnePasswordTokenWriteHourlyLow
+              expr: onepassword_ratelimit_remaining{type="token",action="write"} < 20
+              for: 5m
+              labels:
+                severity: warning
+              annotations:
+                summary: "1Password SA hourly write quota low ({{ $value }} remaining of 100)"
+                description: "A service account has burned more than 80/100 hourly writes for 5m. We almost never write from automation, so any burst is suspicious. Confirm it's not a rogue bulk-rotation script or misconfigured migration tool."
+                runbook_url: "https://github.com/mithr4ndir/k8s-argocd/blob/main/docs/runbooks/onepassword-quota.md"
+            # Collector staleness: distinct from "quota is fine" so operator can tell measurement failure
+            # apart from a healthy cluster.
+            - alert: OnePasswordQuotaCollectorStale
+              expr: onepassword_ratelimit_collector_success == 0
+              for: 30m
+              labels:
+                severity: warning
+              annotations:
+                summary: "1Password quota collector failing on {{ $labels.instance }}"
+                description: "op-quota-collector has been reporting success=0 for 30m. Quota metrics are stale. Check `journalctl -t op-quota-collector -n 50` on the host. Common causes: kill switch tripped, token unreadable, `op` CLI missing."
+                runbook_url: "https://github.com/mithr4ndir/k8s-argocd/blob/main/docs/runbooks/onepassword-quota.md"
+
     wazuh-health:
       groups:
         - name: wazuh-services
