@@ -15,7 +15,7 @@ The alerts in this group watch the **daily account cap** because that is the one
 
 ## Confirm current state
 
-Run from a host with the `op` CLI and token (command-center1 is canonical). **This burns one request against the very quota you are investigating, so do it once, not in a loop.**
+Run from a host with the `op` CLI and token (command-center1 is canonical). `op service-account ratelimit` is a control-plane call that does NOT count against any of the three rate-limit tiers, so probe as often as you need during an incident (verified 2026-04-19 against a draining cap).
 
 ```bash
 ssh command-center1
