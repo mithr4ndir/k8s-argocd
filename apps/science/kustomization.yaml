@@ -5,7 +5,7 @@ resources:
   - hats-catalogs-pvc.yaml
   - dask-cluster.yaml
   - dask-autoscaler.yaml
-  - ingress.yaml
+  - dask-dashboard-service.yaml
   - servicemonitor.yaml
   - prometheus-rules.yaml
   - grafana-dashboard.yaml
