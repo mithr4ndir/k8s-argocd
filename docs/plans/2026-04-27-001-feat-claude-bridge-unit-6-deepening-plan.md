@@ -90,7 +90,7 @@ Unit 6 closes all of the above for Tier 3 only. Tier 2 auto-proceed and Tier 1 s
 - **Postgres outage: fail closed, no fallback storage**. /readyz returns 503 with `reason=postgres_pool_degraded`. Slash command replies "Bridge cannot verify right now (transient). Token still valid; retry in 60 seconds." No client-side cache. On bridge restart, a startup reconciliation walks `actions` in `awaiting_response` past their `ttl_expiry` and transitions them to `expired` with audit-log entry `actor='reconciliation', actor_source='local'`.
 - **Embed edit is best-effort with outbox retry**. /approve handler (1) defers ephemerally, (2) verifies + state-transitions + audit-logs in one transaction, (3) replies to the slash command interaction with `build_decision_confirmation_embed` immediately, (4) attempts the embed edit inline; on failure or 404 (message deleted), inserts an `outbox` row with `notify_idempotency_key='<action_id>:decision-edit'` so the Unit 8 outbox worker drains the retry queue. Slash command never blocks on Discord-side embed update.
 - **/status leakage policy**: non-allowlisted user gets a generic "no action visible" reply; allowlisted user gets state, decided_by, decided_at, ttl_expiry. Never returns the token or the raw command. Both code paths audit-log the `/status` attempt with the requester's user_id (anomaly detection signal: a non-allowlisted user enumerating action_ids).
-- **Idempotent /notify on `client_request_id`**: new optional column `actions.client_request_id TEXT NULL` with a partial unique index `WHERE client_request_id IS NOT NULL`. POST /notify looks up by `client_request_id` first; if found and not terminal AND not expired, returns the existing action_id and a freshly-issued nonce (the token is rotated even on retry, but the action stays the same). Tracking the nonce rotation in audit_log under `event='notify_retry_reissue'` so retries are visible.
+- **Idempotent /notify on `client_request_id`**: new optional column `actions.client_request_id TEXT NULL` with a partial unique index scoped to ACTIVE states only: `CREATE UNIQUE INDEX idx_actions_client_request_id_active ON actions (client_request_id) WHERE client_request_id IS NOT NULL AND state IN ('pending','pending_notify','awaiting_response','committing')`. The active-states predicate is required: a non-scoped `WHERE client_request_id IS NOT NULL` index would block the retry-after-expiry path because the original (now-terminal) row would still occupy the key. With the scoped predicate, terminal/expired actions release the key and a fresh /notify with the same client_request_id can land. POST /notify lookup query: `SELECT action_id FROM actions WHERE client_request_id=$1 AND state IN (<active>) ORDER BY created_at DESC LIMIT 1`. If found, return existing action_id and issue a fresh nonce (audit row `event='notify_retry_reissue'`). If not found (no active row), insert a new action; the unique index does not conflict because terminal rows are excluded. The set of "active states" is centralized in `state_machine.py` as `ACTIVE_STATES` to keep the index predicate, the lookup query, and the application logic in lockstep; adding a new state requires updating all three together (caught by the graph-completeness test in 6.3).
 - **Audit `redacted_payload` minimum schema**: typed via a Pydantic model `AuditEventPayload` enforced on write, JSONB-tolerant on read so older shapes don't break replay. Fields: `event`, `action_id`, `decided_by`, `actor_source`, `verify_failure_reason`, `hmac_secret_slot`, `client_request_id`, `ts_iso`.
 
 ## Open Questions
@@ -104,7 +104,7 @@ Unit 6 closes all of the above for Tier 3 only. Tier 2 auto-proceed and Tier 1 s
 - **Postgres outage**: fail closed with typed reason, no fallback. See decisions.
 - **/status to non-allowlisted**: generic reply, audit-logged. See decisions.
 - **Embed edit timing**: best-effort + outbox retry. See decisions.
-- **Idempotent /notify**: optional `client_request_id` with partial unique index. See decisions.
+- **Idempotent /notify**: optional `client_request_id` with partial unique index scoped to ACTIVE states only (so retry-after-expiry can land a new row). See decisions.
 - **Audit payload schema**: Pydantic model enforced on write, tolerant on read. See decisions.
 - **Discord error message collapse**: two ephemeral replies; full categories in audit log. See decisions.
 - **/notify rate limiting**: deferred to Unit 7.
@@ -271,7 +271,7 @@ This deepening pass keeps the master plan's Unit 6 boundary intact (one PR, one 
 - Test: `tests/integration/test_unit_6_migration.py`
 
 **Approach:**
-- Add `actions.client_request_id TEXT NULL` plus partial unique index `WHERE client_request_id IS NOT NULL`.
+- Add `actions.client_request_id TEXT NULL` plus a partial unique index scoped to active states: `CREATE UNIQUE INDEX idx_actions_client_request_id_active ON actions (client_request_id) WHERE client_request_id IS NOT NULL AND state IN ('pending','pending_notify','awaiting_response','committing')`. The state-list literal in the migration must match `state_machine.ACTIVE_STATES` exactly; the migration includes a comment pointing at that constant.
 - Add the prev-state-not-terminal CHECK constraint.
 - Re-issue the existing `claude_bridge_app` privilege grants for the new column (no change required; INSERT/UPDATE on actions are already granted).
 - `alembic upgrade head` then `alembic downgrade -1` round-trips cleanly.
@@ -283,9 +283,12 @@ This deepening pass keeps the master plan's Unit 6 boundary intact (one PR, one 
 - Happy path: migration applies on a fresh DB; the new index and constraint exist.
 - Happy path: migration downgrades cleanly.
 - Edge case: an existing action with `client_request_id=NULL` does not violate the new unique index.
-- Edge case: inserting two actions with the same non-null `client_request_id` raises a unique violation.
+- Edge case: inserting two ACTIVE actions with the same non-null `client_request_id` raises a unique violation.
+- Edge case: inserting an active action with the same `client_request_id` as a TERMINAL row succeeds (the partial index excludes terminal rows). This proves the retry-after-expiry path lands.
+- Edge case: transitioning the active row to `expired` and then inserting a fresh action with the same `client_request_id` succeeds (idempotency key released by terminal transition).
 - Error path: attempting to UPDATE an action whose prev_state is `'approved'` raises the new CHECK constraint.
 - Integration: the migration is idempotent (applying it twice via `alembic stamp` then `alembic upgrade` is a no-op).
+- Integration: `state_machine.ACTIVE_STATES` matches the literal state list in the migration's index predicate (assert via Python introspection in a unit test so a future state addition that updates only the constant is caught at test time, not in production).
 
 **Verification:**
 - `alembic upgrade head` applied against the live `claude_bridge` DB on 192.168.1.123.
@@ -431,7 +434,7 @@ This deepening pass keeps the master plan's Unit 6 boundary intact (one PR, one 
 - Test: `tests/integration/test_approval_service.py`, `tests/unit/test_audit.py`, `tests/unit/test_allowlist.py`
 
 **Approach:**
-- `ApprovalService.issue(notify_request) -> IssuedAction`: handles the /notify request. Looks up `client_request_id`; if found and not terminal and not expired, returns the existing action with a freshly issued token. Otherwise creates the action (state=pending_notify) and the nonce in one transaction.
+- `ApprovalService.issue(notify_request) -> IssuedAction`: handles the /notify request. If `client_request_id` is supplied, looks for an ACTIVE row (state in `ACTIVE_STATES`) with that key; if found, returns the existing action with a freshly issued nonce (the partial unique index guarantees at most one active row per key). If no active row exists -- either no prior call OR the prior call's action has reached a terminal state -- inserts a new action (state=pending_notify) and a fresh nonce in one transaction. Terminal rows are silently bypassed by the partial index, so retry-after-expiry creates a new action without a UNIQUE_VIOLATION.
 - `ApprovalService.approve(token, user_id) -> ResolveResult`: full /approve flow. Transactionally consumes nonce, transitions state, writes audit log. Returns a result that the caller (BridgeBot.handle_approve) translates to the Discord reply.
 - `ApprovalService.deny(token, user_id) -> ResolveResult`: same shape as approve.
 - `ApprovalService.status(action_id, user_id) -> StatusResult`: returns full state to allowlisted, generic to others. Always audit-logs the attempt.
