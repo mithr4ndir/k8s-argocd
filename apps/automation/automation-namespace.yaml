@@ -1,0 +1,14 @@
+---
+# Namespace for autonomous-agent control-plane workloads (claude-bridge,
+# future agent runners, etc.). Kept separate from `monitoring` and `media`
+# so NetworkPolicy and RBAC scope cleanly to "things that talk to LLMs or
+# Discord on behalf of operators".
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: automation
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

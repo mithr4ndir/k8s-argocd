@@ -1,0 +1,123 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claude-bridge
+  namespace: automation
+  labels:
+    app: claude-bridge
+    app.kubernetes.io/name: claude-bridge
+    app.kubernetes.io/component: hitl-bridge
+    app.kubernetes.io/part-of: automation
+spec:
+  # Single replica is mandatory: the bridge holds a Discord Gateway
+  # WebSocket and registers slash commands. Two replicas double-fire
+  # interaction handlers (memory: feedback_single_replica_discord_gateway).
+  # Multi-replica with leader election is a deferred change.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: claude-bridge
+  # Recreate, not RollingUpdate. Single Gateway connection plus a single
+  # 8080 port mean two pods cannot coexist briefly without contention.
+  # Tradeoff: ~10s of unavailability per deploy, acceptable for an
+  # approval bridge whose tokens have a 15-minute TTL.
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: claude-bridge
+        app.kubernetes.io/name: claude-bridge
+        app.kubernetes.io/component: hitl-bridge
+      annotations:
+        # Reloader restarts the pod when the ConfigMap or referenced
+        # Secret changes. ESO refresh + 1P rotation flow goes:
+        # 1P -> ESO -> Secret update -> Reloader trigger -> pod restart
+        # -> bridge picks up new HMAC current secret on the next request.
+        reloader.stakater.com/auto: "true"
+    spec:
+      # system-cluster-critical: the bridge gates dangerous actions across
+      # the homelab; if it dies under memory pressure, autonomous agents
+      # lose their hard-block path. Same priority as discord-alert-proxy.
+      priorityClassName: system-cluster-critical
+      # 60s grace lets the bot send Discord disconnect frames cleanly and
+      # finish in-flight HTTP requests. Default 30s sometimes truncates
+      # the Gateway close handshake.
+      terminationGracePeriodSeconds: 60
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bridge
+          # 12-char short SHA matches the GHCR tag emitted by the
+          # claude-bridge CI on merges to main. Operator bumps this line
+          # via PR after a tested image is published. Same convention as
+          # discord-alert-proxy (image: ghcr.io/.../discord-alert-proxy:<sha>).
+          image: ghcr.io/mithr4ndir/claude-bridge:11c71d3f5437
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: claude-bridge-config
+            - secretRef:
+                name: claude-bridge-secrets
+          # Container is read-only-root (Dockerfile already supports it);
+          # /tmp is the only writable path the FastAPI stack needs (e.g.,
+          # for occasional uvicorn reload artefacts and Python tempfile).
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            # 6 * 10s = 60s of grace before pulling out of rotation. /readyz
+            # checks both Discord Gateway (connected) and Postgres (1s SELECT 1).
+            # A momentary DB hiccup or Gateway resume should not flap traffic.
+            failureThreshold: 6
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            # Cold start: alembic-style models import + asyncpg pool open +
+            # Discord Gateway login + slash command sync can take ~20-30s.
+            # 30 * 2s = 60s budget before liveness takes over.
+            initialDelaySeconds: 5
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

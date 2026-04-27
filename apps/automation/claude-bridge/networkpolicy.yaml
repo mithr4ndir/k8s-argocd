@@ -1,0 +1,86 @@
+---
+# Defense-in-depth at the network layer. The bridge already enforces
+# per-request API key auth; this policy reduces blast radius if a future
+# code bug or compromised dependency tries to reach somewhere it should
+# not (lateral movement, exfil to a non-Discord host, etc.).
+#
+# Rules:
+#   Ingress:
+#     - From anywhere on 8080 (LB clients are external LAN hooks; the
+#       app layer enforces X-API-Key, so network ACLs are belt+braces).
+#     - From kube-prometheus-stack on 8080 for future ServiceMonitor
+#       scraping (no-op until /metrics is added in a follow-up unit).
+#   Egress:
+#     - DNS to kube-system (UDP 53) for resolving discord.com and the
+#       Postgres hostname (if the DSN ever uses one instead of an IP).
+#     - Postgres at 192.168.1.123:5432 only.
+#     - TCP 443 to the internet, excluding RFC1918 and cluster CIDRs,
+#       for Discord Gateway WebSocket + REST API.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: claude-bridge
+  namespace: automation
+  labels:
+    app: claude-bridge
+    app.kubernetes.io/name: claude-bridge
+spec:
+  podSelector:
+    matchLabels:
+      app: claude-bridge
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 8080
+      # No `from:` block means "from anywhere" (intra-cluster + external
+      # LB clients). The app-layer X-API-Key check is the real gate; this
+      # is the broadest the policy can be while still imposing a
+      # protocol/port constraint.
+  egress:
+    # DNS resolution. Some clusters run kube-dns under a different label;
+    # using namespaceSelector + portSelector covers the common cases
+    # without hardcoding a service IP.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Postgres on the homelab Postgres host (TimescaleDB at 192.168.1.123).
+    # Single /32 CIDR keeps the rule auditable: any future Postgres move
+    # must update this manifest.
+    - to:
+        - ipBlock:
+            cidr: 192.168.1.123/32
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Discord Gateway WS + REST API. Discord publishes a CIDR list but
+    # rotates it; allowing TCP 443 to the public internet (with
+    # internal ranges excluded) is the standard workaround. The bridge
+    # only initiates TLS to gateway.discord.gg + discord.com, so the
+    # blast radius is the API key + bot token, both already managed.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              # RFC1918
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              # Link-local + multicast + reserved
+              - 169.254.0.0/16
+              - 224.0.0.0/4
+              - 240.0.0.0/4
+              # Loopback-ish (defensive, would never originate from a
+              # pod, but the explicit deny keeps the rule explicit).
+              - 127.0.0.0/8
+      ports:
+        - protocol: TCP
+          port: 443

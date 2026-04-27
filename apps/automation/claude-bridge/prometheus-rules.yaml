@@ -1,0 +1,116 @@
+---
+# Infrastructure-level alerts. Application-level alerts (e.g.,
+# allowlist anomalies, Tier 3 approval rate spikes) require the
+# /metrics endpoint that ships in a follow-up unit; rules for those
+# will be added then.
+#
+# All rules carry `severity: critical` or `warning`. The
+# discord-alert-proxy themed-embed router uses severity to pick the
+# Balrog (red, critical) or Star Wars (orange, warning) embed.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: claude-bridge-alerts
+  namespace: automation
+  labels:
+    # `release: kube-prometheus-stack` is the discovery selector
+    # configured in the kube-prometheus-stack values. Without it,
+    # Prometheus does not pick up the rule.
+    release: kube-prometheus-stack
+    app.kubernetes.io/name: claude-bridge-alerts
+    app.kubernetes.io/part-of: automation
+spec:
+  groups:
+    - name: claude-bridge-availability
+      rules:
+        - alert: ClaudeBridgeDown
+          # Single-replica deployment: zero ready pods means the bridge
+          # is fully offline and Tier 3 actions cannot be approved or
+          # denied. Hooks fail-closed in this state, but operators need
+          # to know quickly.
+          expr: |
+            kube_deployment_status_replicas_available{
+              namespace="automation",
+              deployment="claude-bridge"
+            } == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: claude-bridge
+          annotations:
+            summary: "claude-bridge has no ready replicas"
+            description: |
+              The claude-bridge deployment in namespace automation has
+              had 0 ready replicas for 5 minutes. Tier 3 approvals are
+              unavailable; hooks fall back to hard-block (deny). Check
+              `kubectl -n automation describe pod -l app=claude-bridge`.
+        - alert: ClaudeBridgePodCrashLooping
+          # >0.1 restarts/sec averaged over 10min = roughly one restart
+          # per ~10s, which indicates a stuck crash loop rather than a
+          # graceful redeploy.
+          expr: |
+            rate(kube_pod_container_status_restarts_total{
+              namespace="automation",
+              container="bridge"
+            }[10m]) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+            component: claude-bridge
+          annotations:
+            summary: "claude-bridge container is crash-looping"
+            description: |
+              The claude-bridge container has restarted >0.1 times/sec
+              over the last 10 minutes. Likely causes: misconfigured
+              env (missing HMAC current secret, bad postgres DSN), or
+              startup probe failing (Discord Gateway login).
+              Check `kubectl -n automation logs -l app=claude-bridge --previous`.
+        - alert: ClaudeBridgeMigrationFailed
+          # PreSync alembic job has failed (1+ failed pods). Sync is
+          # blocked until the migration succeeds, so the operator must
+          # triage. Schema regressions or DB outages surface here.
+          expr: |
+            kube_job_status_failed{
+              namespace="automation",
+              job_name=~"claude-bridge-migrate.*"
+            } > 0
+          for: 1m
+          labels:
+            severity: critical
+            component: claude-bridge
+          annotations:
+            summary: "claude-bridge alembic migration failed"
+            description: |
+              The PreSync alembic migration job in namespace automation
+              reported a failed pod. ArgoCD has blocked the sync; the
+              previous bridge revision continues serving the old schema.
+              Check `kubectl -n automation logs job/{{ $labels.job_name }}`
+              and confirm the migrate-role DSN + DB reachability.
+    - name: claude-bridge-readiness
+      rules:
+        - alert: ClaudeBridgeNotReady
+          # Single replica + readinessProbe failing means /readyz is
+          # 503-ing: either Discord Gateway is not connected or the
+          # Postgres pool probe is failing. Different from ClaudeBridgeDown
+          # because the pod is still up; the LB has just pulled it from
+          # rotation and external callers see connection refused.
+          expr: |
+            kube_deployment_status_replicas{
+              namespace="automation",
+              deployment="claude-bridge"
+            } > 0
+            and
+            kube_deployment_status_replicas_available{
+              namespace="automation",
+              deployment="claude-bridge"
+            } == 0
+          for: 5m
+          labels:
+            severity: warning
+            component: claude-bridge
+          annotations:
+            summary: "claude-bridge pod is running but not ready"
+            description: |
+              claude-bridge has a running pod but /readyz is failing.
+              Likely: Postgres pool degraded or Discord Gateway
+              disconnected. Inspect the pod's /readyz response and logs.
