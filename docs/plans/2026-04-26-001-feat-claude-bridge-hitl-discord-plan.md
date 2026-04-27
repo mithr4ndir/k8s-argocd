@@ -93,6 +93,7 @@ Out of scope:
 - Pre-approval policies (e.g., automatically approve known-safe `terraform apply` patterns). Future work, see Future Considerations.
 - HTTP Interactions endpoint mode. Gateway-only.
 - Hosting the bridge outside the cluster as a non-K8s fallback. See break-glass section for the Phase 0 emergency override; a true off-cluster fallback is deferred.
+- **Gating non-Bash agent activity.** The `PreToolUse` hook is registered with a `Bash` matcher only. Plan and brainstorm generation (e.g., `/ce:plan`, `/ce:brainstorm`, `/ce:work`), file edits via the `Edit` and `Write` tools, file reads, slash command invocations inside Claude Code, and any other tool that is not `Bash` flow without bridge involvement. The bridge is not a content gate or an audit log of "what the agent worked on"; it is a blast-radius gate on shell commands matching the Tier 3 deny list. (One narrow exception: a future `PostToolUse` hook captures pre-edit file content into `~/.claude/edit-snapshots/` for Tier 2 undo, see Unit 8. That hook records, it does not gate.)
 
 ### Deferred to Separate Tasks
 
