@@ -72,9 +72,6 @@ spec:
         app.kubernetes.io/name: nzbget
         app.kubernetes.io/instance: release-name
     spec:
-      
-      imagePullSecrets:
-        - name: ghcr-pull
       serviceAccountName: default
       automountServiceAccountToken: true
       securityContext:

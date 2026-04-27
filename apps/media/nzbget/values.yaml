@@ -3,9 +3,6 @@ image:
   tag: "v25.3-ls212"
   pullPolicy: IfNotPresent
 
-imagePullSecrets:
-  - name: ghcr-pull
-
 service:
   main:
     annotations:
