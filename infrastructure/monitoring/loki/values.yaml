@@ -26,6 +26,7 @@ loki:
       ingestion_burst_size_mb: 20
       max_query_series: 500
       max_query_parallelism: 2
+      discover_service_name: []
 
     compactor:
       working_directory: /var/loki/compactor
