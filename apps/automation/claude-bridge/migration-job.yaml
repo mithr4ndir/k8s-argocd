@@ -1,0 +1,104 @@
+---
+# ArgoCD Sync hook: runs `alembic upgrade head` during the Sync phase
+# at sync-wave "-1", which is AFTER the migrate ExternalSecret (wave
+# "-2") and BEFORE the Deployment (default wave 0). If the migration
+# fails, the sync fails and the new bridge image is never rolled out:
+# the running pod continues serving the previous schema. This is the
+# standard "DB migrations gate the rollout" pattern.
+#
+# Why Sync hook (not PreSync): the migrate-role Secret is produced by
+# ESO from a regular ExternalSecret resource that lives in the Sync
+# phase. PreSync hooks run BEFORE the Sync phase begins, so the
+# migrate Secret would not exist yet when this Job tried to mount it
+# via envFrom. Using a Sync hook with sync-wave ordering lets ArgoCD
+# wait for the ExternalSecret to be Healthy (which ESO marks only
+# after the K8s Secret has materialized) before this Job starts.
+#
+# The job runs the SAME image as the bridge (alembic.ini lives in the
+# repo and is baked into the image), but with a different DSN env var
+# (CLAUDE_BRIDGE_MIGRATE_DSN, claude_bridge_migrate role) and an
+# overridden command (alembic instead of uvicorn).
+#
+# hook-delete-policy: BeforeHookCreation,HookSucceeded
+#   - BeforeHookCreation: previous job artifacts are removed before a
+#     new run, so each sync gets a clean job (re-runnable).
+#   - HookSucceeded: artifacts are pruned on success (no clutter).
+#   - On failure, the job sticks around for `kubectl logs` triage.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: claude-bridge-migrate
+  namespace: automation
+  labels:
+    app: claude-bridge
+    app.kubernetes.io/name: claude-bridge
+    app.kubernetes.io/component: migrations
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  # 2 retries before the sync is marked failed. Migrations are
+  # idempotent (alembic checks current revision before applying), so a
+  # transient asyncpg connect error is the typical cause of retry.
+  backoffLimit: 2
+  # Job lingers for 5 minutes after success for log inspection, then
+  # the controller GCs it. On failure, the job is retained until the
+  # next successful sync (HookSucceeded only prunes on success).
+  ttlSecondsAfterFinished: 300
+  # 10-minute hard wall. Bridge migrations are tiny today (3 revisions
+  # totaling ~30 statements). Bumped above 5min default to absorb DDL
+  # locks under contention on the shared 192.168.1.123 cluster.
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app: claude-bridge
+        app.kubernetes.io/name: claude-bridge
+        app.kubernetes.io/component: migrations
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: alembic
+          image: ghcr.io/mithr4ndir/claude-bridge:11c71d3f5437
+          imagePullPolicy: IfNotPresent
+          # alembic.ini reads sqlalchemy.url from CLAUDE_BRIDGE_MIGRATE_DSN
+          # via a ConfigParser interpolation override in env.py (Unit 3).
+          # `upgrade head` is idempotent: applies pending revisions, no-ops
+          # when the DB is already at head.
+          command:
+            - alembic
+            - "-c"
+            - alembic.ini
+            - upgrade
+            - head
+          envFrom:
+            - secretRef:
+                name: claude-bridge-migrate-secrets
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 32Mi

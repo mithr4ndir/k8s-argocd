@@ -1,0 +1,34 @@
+---
+# Non-secret runtime config. Discord snowflakes (guild + channel IDs)
+# are not cryptographic secrets, but rotating them is rare and they fit
+# the ConfigMap shape better than ESO.
+#
+# IMPORTANT: replace the placeholder snowflakes below with the real
+# guild/channel IDs from the QuasarLab Discord server before the first
+# sync. Operator handoff:
+#   1. Discord Developer Portal -> bridge bot -> Bot tab -> copy guild ID
+#   2. Right-click each channel in Discord (with Developer Mode on) ->
+#      Copy ID
+# Channel layout per the master plan:
+#   - bot-activity      (Tier 1 read-only sweeps)
+#   - bot-proposals     (Tier 2 reversible, default-proceed)
+#   - bot-approvals     (Tier 3 hard-gated)
+#   - bot-digest        (06:00 daily digest of auto-proceeded Tier 2s)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: claude-bridge-config
+  namespace: automation
+  labels:
+    app: claude-bridge
+    app.kubernetes.io/name: claude-bridge
+data:
+  CLAUDE_BRIDGE_DISCORD_ENABLED: "true"
+  # QuasarLab Discord guild + the four bot-* channels.
+  CLAUDE_BRIDGE_DISCORD_GUILD_ID: "398359757800603650"
+  CLAUDE_BRIDGE_DISCORD_ACTIVITY_CHANNEL_ID: "1497986580256919756"
+  CLAUDE_BRIDGE_DISCORD_PROPOSALS_CHANNEL_ID: "1497989411986735277"
+  CLAUDE_BRIDGE_DISCORD_APPROVALS_CHANNEL_ID: "1497989457385619676"
+  CLAUDE_BRIDGE_DISCORD_DIGEST_CHANNEL_ID: "1498466462929518642"
+  # Default INFO; raise to DEBUG when triaging without a code change.
+  CLAUDE_BRIDGE_LOG_LEVEL: "INFO"

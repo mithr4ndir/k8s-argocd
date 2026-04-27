@@ -1,0 +1,16 @@
+---
+# minAvailable: 1 means the cluster will never voluntarily evict the
+# single bridge pod (drain, autoscaler) before it has a replacement.
+# Combined with priorityClassName: system-cluster-critical on the
+# Deployment, this gives both voluntary (PDB) and involuntary (kubelet
+# eviction) protection.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: claude-bridge
+  namespace: automation
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: claude-bridge
