@@ -1,9 +1,18 @@
 ---
-# ArgoCD PreSync hook: runs `alembic upgrade head` before any
-# Deployment changes are applied. If the migration fails, the sync
-# fails, and the new bridge image is never rolled out: the running pod
-# continues serving the previous schema. This is the standard "DB
-# migrations gate the rollout" pattern.
+# ArgoCD Sync hook: runs `alembic upgrade head` during the Sync phase
+# at sync-wave "-1", which is AFTER the migrate ExternalSecret (wave
+# "-2") and BEFORE the Deployment (default wave 0). If the migration
+# fails, the sync fails and the new bridge image is never rolled out:
+# the running pod continues serving the previous schema. This is the
+# standard "DB migrations gate the rollout" pattern.
+#
+# Why Sync hook (not PreSync): the migrate-role Secret is produced by
+# ESO from a regular ExternalSecret resource that lives in the Sync
+# phase. PreSync hooks run BEFORE the Sync phase begins, so the
+# migrate Secret would not exist yet when this Job tried to mount it
+# via envFrom. Using a Sync hook with sync-wave ordering lets ArgoCD
+# wait for the ExternalSecret to be Healthy (which ESO marks only
+# after the K8s Secret has materialized) before this Job starts.
 #
 # The job runs the SAME image as the bridge (alembic.ini lives in the
 # repo and is baked into the image), but with a different DSN env var
@@ -25,7 +34,8 @@ metadata:
     app.kubernetes.io/name: claude-bridge
     app.kubernetes.io/component: migrations
   annotations:
-    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-1"
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
 spec:
   # 2 retries before the sync is marked failed. Migrations are
