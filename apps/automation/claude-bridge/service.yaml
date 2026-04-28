@@ -1,10 +1,10 @@
 ---
 # LoadBalancer (not ClusterIP) because POST /notify is called from
 # outside the cluster (operator workstations + future remote agents).
-# MetalLB hands out 192.168.1.227 via L2 advertisement; pool range is
+# MetalLB hands out 192.168.1.235 via L2 advertisement; pool range is
 # 192.168.1.225-240 (see infrastructure/metallb/values.yaml).
 #
-# Operator hooks should use http://192.168.1.227:8080 (or a DNS record
+# Operator hooks should use http://192.168.1.235:8080 (or a DNS record
 # pointing at this IP) for CLAUDE_BRIDGE_URL after deploy.
 apiVersion: v1
 kind: Service
@@ -16,7 +16,7 @@ metadata:
     app.kubernetes.io/name: claude-bridge
     app.kubernetes.io/component: hitl-bridge
   annotations:
-    metallb.universe.tf/loadBalancerIPs: 192.168.1.227
+    metallb.universe.tf/loadBalancerIPs: 192.168.1.235
 spec:
   type: LoadBalancer
   # externalTrafficPolicy: Local preserves the client source IP for the
