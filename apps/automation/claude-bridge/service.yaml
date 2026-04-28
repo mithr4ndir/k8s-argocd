@@ -19,11 +19,14 @@ metadata:
     metallb.universe.tf/loadBalancerIPs: 192.168.1.235
 spec:
   type: LoadBalancer
-  # externalTrafficPolicy: Local preserves the client source IP for the
-  # bridge's audit log. Combined with single-replica + recreate strategy,
-  # this means LB traffic only routes to the node hosting the live pod;
-  # MetalLB L2 mode handles the failover when the pod moves.
-  externalTrafficPolicy: Local
+  # externalTrafficPolicy: Cluster lets any node announce the LB IP via
+  # MetalLB L2 (only k8cluster1's speaker is consistently elected leader
+  # in this homelab; speakers on k8cluster2 and k8cluster3 currently
+  # crash-loop). Trade-off: client source IP is SNAT'd to the node's IP
+  # in the audit log. The bridge's auth model is X-API-Key on POST
+  # /notify, not IP-based, so source-IP preservation is nice-to-have
+  # rather than required.
+  externalTrafficPolicy: Cluster
   selector:
     app: claude-bridge
   ports:
