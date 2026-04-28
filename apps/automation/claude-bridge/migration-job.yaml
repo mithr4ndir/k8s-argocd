@@ -68,7 +68,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: alembic
-          image: ghcr.io/mithr4ndir/claude-bridge:e953f0fa4e3e
+          image: ghcr.io/mithr4ndir/claude-bridge:f2c1854886da
           imagePullPolicy: IfNotPresent
           # alembic.ini reads sqlalchemy.url from CLAUDE_BRIDGE_MIGRATE_DSN
           # via a ConfigParser interpolation override in env.py (Unit 3).
