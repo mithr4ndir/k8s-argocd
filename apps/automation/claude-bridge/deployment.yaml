@@ -59,7 +59,7 @@ spec:
           # claude-bridge CI on merges to main. Operator bumps this line
           # via PR after a tested image is published. Same convention as
           # discord-alert-proxy (image: ghcr.io/.../discord-alert-proxy:<sha>).
-          image: ghcr.io/mithr4ndir/claude-bridge:f2c1854886da
+          image: ghcr.io/mithr4ndir/claude-bridge:1b30d218a072
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
