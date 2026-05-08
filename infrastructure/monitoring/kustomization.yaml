@@ -8,5 +8,6 @@ resources:
   - vector-aggregator-svc.yaml
   - grafana-externalsecret.yaml
   - healthchecks-watchdog-externalsecret.yaml
+  - snmp-exporter-externalsecret.yaml
   - grafana-dashboards
   - discord-alert-proxy

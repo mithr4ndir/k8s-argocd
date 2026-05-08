@@ -1,0 +1,8 @@
+apiVersion: v2
+name: snmp-exporter
+version: 1.0.0
+description: SNMP exporter for the QuasarLab managed switch (TL-SG2016P) and other SNMP devices
+dependencies:
+  - name: prometheus-snmp-exporter
+    version: "9.14.0"
+    repository: https://prometheus-community.github.io/helm-charts
