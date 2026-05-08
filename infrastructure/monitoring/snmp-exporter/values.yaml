@@ -15,13 +15,18 @@ prometheus-snmp-exporter:
   serviceMonitor:
     enabled: false
 
+  # Load the container's bundled /etc/snmp_exporter/snmp.yml (full module
+  # definitions for if_mib and every other vendor MIB) AND our auths-only
+  # file from a Secret. snmp_exporter v0.30+ merges multiple --config.file
+  # invocations.
   extraArgs:
     - --config.file=/etc/snmp_exporter/snmp.yml
+    - --config.file=/etc/snmp_exporter/auths.yml
 
   extraSecretMounts:
     - name: snmp-exporter-config
-      mountPath: /etc/snmp_exporter/snmp.yml
-      subPath: snmp.yml
+      mountPath: /etc/snmp_exporter/auths.yml
+      subPath: auths.yml
       secretName: snmp-exporter-config
       readOnly: true
       defaultMode: 420
