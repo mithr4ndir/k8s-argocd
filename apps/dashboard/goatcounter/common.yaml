@@ -97,7 +97,7 @@ spec:
           env:
           - name: TZ
             value: America/Los_Angeles
-          image: arp242/goatcounter:v2.5.4
+          image: arp242/goatcounter:2.7.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 5
