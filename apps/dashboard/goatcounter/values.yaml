@@ -33,7 +33,8 @@ controllers:
         image:
           repository: arp242/goatcounter
           # Pin to a known-good tag. Bump deliberately, never use :latest.
-          tag: "v2.5.4"
+          # Upstream tags are unprefixed (no leading "v"); see Docker Hub.
+          tag: "2.7.0"
           pullPolicy: IfNotPresent
         command: ["goatcounter"]
         args:
