@@ -47,7 +47,6 @@ spec:
                 - ALL
               readOnlyRootFilesystem: true
             args:
-            - python
             - -m
             - nq_ibb.forward.cronjob_entrypoint
             envFrom:
