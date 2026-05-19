@@ -6,7 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/name: donchian-signal
     app.kubernetes.io/instance: donchian-signal
-    app.kubernetes.io/version: 0.1.0
+    app.kubernetes.io/version: 0.1.1
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/component: signal-generator
 spec:
@@ -24,7 +24,7 @@ spec:
           labels:
             app.kubernetes.io/name: donchian-signal
             app.kubernetes.io/instance: donchian-signal
-            app.kubernetes.io/version: 0.1.0
+            app.kubernetes.io/version: 0.1.1
             app.kubernetes.io/managed-by: Helm
             app.kubernetes.io/component: signal-generator
         spec:
@@ -38,7 +38,7 @@ spec:
               type: RuntimeDefault
           containers:
           - name: signal
-            image: ghcr.io/mithr4ndir/palantir-nq:0.1.0
+            image: ghcr.io/mithr4ndir/palantir-nq:0.1.1
             imagePullPolicy: IfNotPresent
             securityContext:
               allowPrivilegeEscalation: false
