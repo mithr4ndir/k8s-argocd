@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: donchian-signal-donchian-signal-grafana-dashboard
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: donchian-signal
+    app.kubernetes.io/instance: donchian-signal
+    app.kubernetes.io/version: 0.1.0
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: signal-generator
+    grafana_dashboard: '1'
+data:
+  donchian_forward.json: "\n{\n  \"annotations\": {\"list\": []},\n  \"description\"\
+    : \"Donchian-10/5 swing forward-test: signals fired, trades logged, cumulative\
+    \ P&L vs backtest baseline, slippage distribution.\",\n  \"editable\": true,\n\
+    \  \"graphTooltip\": 0,\n  \"panels\": [\n    {\n      \"id\": 1,\n      \"type\"\
+    : \"stat\",\n      \"title\": \"Signals fired (last 90d)\",\n      \"gridPos\"\
+    : {\"x\": 0, \"y\": 0, \"w\": 6, \"h\": 4},\n      \"targets\": [\n        {\n\
+    \          \"rawSql\": \"SELECT COUNT(*) FROM donchian_signals WHERE signal_date\
+    \ > NOW() - INTERVAL '90 days' AND skip_reason IS NULL\",\n          \"format\"\
+    : \"table\",\n          \"refId\": \"A\"\n        }\n      ],\n      \"datasource\"\
+    : {\"type\": \"postgres\", \"uid\": \"postgres-palantir-nq\"}\n    },\n    {\n\
+    \      \"id\": 2,\n      \"type\": \"stat\",\n      \"title\": \"Trades logged\
+    \ (last 90d)\",\n      \"gridPos\": {\"x\": 6, \"y\": 0, \"w\": 6, \"h\": 4},\n\
+    \      \"targets\": [\n        {\n          \"rawSql\": \"SELECT COUNT(*) FROM\
+    \ donchian_trades dt JOIN donchian_signals ds ON dt.signal_id = ds.signal_id WHERE\
+    \ ds.signal_date > NOW() - INTERVAL '90 days'\",\n          \"format\": \"table\"\
+    ,\n          \"refId\": \"A\"\n        }\n      ],\n      \"datasource\": {\"\
+    type\": \"postgres\", \"uid\": \"postgres-palantir-nq\"}\n    },\n    {\n    \
+    \  \"id\": 3,\n      \"type\": \"stat\",\n      \"title\": \"Open positions\"\
+    ,\n      \"gridPos\": {\"x\": 12, \"y\": 0, \"w\": 6, \"h\": 4},\n      \"targets\"\
+    : [\n        {\n          \"rawSql\": \"SELECT COUNT(*) FROM donchian_trades WHERE\
+    \ exit_ts IS NULL\",\n          \"format\": \"table\",\n          \"refId\": \"\
+    A\"\n        }\n      ],\n      \"datasource\": {\"type\": \"postgres\", \"uid\"\
+    : \"postgres-palantir-nq\"}\n    },\n    {\n      \"id\": 4,\n      \"type\":\
+    \ \"stat\",\n      \"title\": \"Cumulative forward $ (closed)\",\n      \"gridPos\"\
+    : {\"x\": 18, \"y\": 0, \"w\": 6, \"h\": 4},\n      \"targets\": [\n        {\n\
+    \          \"rawSql\": \"SELECT COALESCE(SUM(pnl_dollars_actual), 0) FROM donchian_trades\
+    \ WHERE exit_ts IS NOT NULL\",\n          \"format\": \"table\",\n          \"\
+    refId\": \"A\"\n        }\n      ],\n      \"datasource\": {\"type\": \"postgres\"\
+    , \"uid\": \"postgres-palantir-nq\"},\n      \"fieldConfig\": {\"defaults\": {\"\
+    unit\": \"currencyUSD\"}}\n    },\n    {\n      \"id\": 5,\n      \"type\": \"\
+    timeseries\",\n      \"title\": \"Cumulative forward P&L vs trade #\",\n     \
+    \ \"gridPos\": {\"x\": 0, \"y\": 4, \"w\": 24, \"h\": 8},\n      \"targets\":\
+    \ [\n        {\n          \"rawSql\": \"SELECT exit_ts AS time, SUM(pnl_dollars_actual)\
+    \ OVER (ORDER BY exit_ts) AS cumulative_usd FROM donchian_trades WHERE exit_ts\
+    \ IS NOT NULL ORDER BY exit_ts\",\n          \"format\": \"time_series\",\n  \
+    \        \"refId\": \"A\"\n        }\n      ],\n      \"datasource\": {\"type\"\
+    : \"postgres\", \"uid\": \"postgres-palantir-nq\"},\n      \"fieldConfig\": {\"\
+    defaults\": {\"unit\": \"currencyUSD\"}}\n    },\n    {\n      \"id\": 6,\n  \
+    \    \"type\": \"table\",\n      \"title\": \"Recent signals (last 30d)\",\n \
+    \     \"gridPos\": {\"x\": 0, \"y\": 12, \"w\": 12, \"h\": 10},\n      \"targets\"\
+    : [\n        {\n          \"rawSql\": \"SELECT signal_date, side, breakout_level,\
+    \ todays_close, initial_stop_px, skip_reason, status FROM donchian_signals WHERE\
+    \ signal_date > NOW() - INTERVAL '30 days' ORDER BY signal_date DESC\",\n    \
+    \      \"format\": \"table\",\n          \"refId\": \"A\"\n        }\n      ],\n\
+    \      \"datasource\": {\"type\": \"postgres\", \"uid\": \"postgres-palantir-nq\"\
+    }\n    },\n    {\n      \"id\": 7,\n      \"type\": \"table\",\n      \"title\"\
+    : \"Slippage: actual vs expected entry\",\n      \"gridPos\": {\"x\": 12, \"y\"\
+    : 12, \"w\": 12, \"h\": 10},\n      \"targets\": [\n        {\n          \"rawSql\"\
+    : \"SELECT ds.signal_date, ds.side, ds.entry_px_expected, dt.entry_px_actual,\
+    \ dt.slippage_vs_expected_pts FROM donchian_trades dt JOIN donchian_signals ds\
+    \ ON dt.signal_id = ds.signal_id ORDER BY ds.signal_date DESC LIMIT 30\",\n  \
+    \        \"format\": \"table\",\n          \"refId\": \"A\"\n        }\n     \
+    \ ],\n      \"datasource\": {\"type\": \"postgres\", \"uid\": \"postgres-palantir-nq\"\
+    }\n    }\n  ],\n  \"schemaVersion\": 38,\n  \"tags\": [\"palantir-nq\", \"donchian\"\
+    , \"forward-test\"],\n  \"timezone\": \"America/New_York\",\n  \"title\": \"Donchian\
+    \ Swing Forward-Test\",\n  \"uid\": \"donchian-forward\",\n  \"version\": 1\n}"

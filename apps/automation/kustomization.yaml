@@ -10,3 +10,4 @@ resources:
   # api-key-local-hook, api-key-remote-agent, postgres dsn/migrate_dsn)
   # are validated in the Infrastructure vault.
   # - claude-bridge/
+  - donchian-signal/
