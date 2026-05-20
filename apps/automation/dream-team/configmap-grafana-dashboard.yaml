@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dream-team-dream-team-grafana-dashboard
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: dream-team
+    app.kubernetes.io/instance: dream-team
+    app.kubernetes.io/version: 0.1.2
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: dream-team
+    grafana_dashboard: '1'
+data:
+  dream_team_levels.json: "\n{\n  \"annotations\": {\"list\": []},\n  \"description\"\
+    : \"Dream Team Indicators: latest NQ pre-market reference levels (PDH/PDL/Settle/PVAH/POC/PVAL/LWH/LWL).\"\
+    ,\n  \"editable\": true,\n  \"graphTooltip\": 0,\n  \"panels\": [\n    {\n   \
+    \   \"id\": 1,\n      \"type\": \"table\",\n      \"title\": \"Latest Dream Team\
+    \ Levels (NQ)\",\n      \"gridPos\": {\"x\": 0, \"y\": 0, \"w\": 24, \"h\": 12},\n\
+    \      \"datasource\": {\"type\": \"postgres\", \"uid\": \"postgres-palantir-nq\"\
+    },\n      \"targets\": [\n        {\n          \"rawSql\": \"SELECT 'LWH' AS level,\
+    \ lwh AS price FROM dream_team_levels ORDER BY target_date DESC LIMIT 1 UNION\
+    \ ALL SELECT 'PDH', pdh FROM dream_team_levels ORDER BY target_date DESC LIMIT\
+    \ 1 UNION ALL SELECT 'PVAH', pvah FROM dream_team_levels ORDER BY target_date\
+    \ DESC LIMIT 1 UNION ALL SELECT 'POC', poc FROM dream_team_levels ORDER BY target_date\
+    \ DESC LIMIT 1 UNION ALL SELECT 'Settle', settle FROM dream_team_levels ORDER\
+    \ BY target_date DESC LIMIT 1 UNION ALL SELECT 'PVAL', pval FROM dream_team_levels\
+    \ ORDER BY target_date DESC LIMIT 1 UNION ALL SELECT 'PDL', pdl FROM dream_team_levels\
+    \ ORDER BY target_date DESC LIMIT 1 UNION ALL SELECT 'LWL', lwl FROM dream_team_levels\
+    \ ORDER BY target_date DESC LIMIT 1\",\n          \"format\": \"table\",\n   \
+    \       \"refId\": \"A\"\n        }\n      ],\n      \"fieldConfig\": {\"defaults\"\
+    : {\"custom\": {\"align\": \"auto\"}}, \"overrides\": []},\n      \"transformations\"\
+    : [{\"id\": \"sortBy\", \"options\": {\"fields\": {}, \"sort\": [{\"field\": \"\
+    price\", \"desc\": true}]}}]\n    },\n    {\n      \"id\": 2,\n      \"type\"\
+    : \"stat\",\n      \"title\": \"Reference session\",\n      \"gridPos\": {\"x\"\
+    : 0, \"y\": 12, \"w\": 8, \"h\": 4},\n      \"datasource\": {\"type\": \"postgres\"\
+    , \"uid\": \"postgres-palantir-nq\"},\n      \"targets\": [\n        {\n     \
+    \     \"rawSql\": \"SELECT reference_date FROM dream_team_levels ORDER BY target_date\
+    \ DESC LIMIT 1\",\n          \"format\": \"table\",\n          \"refId\": \"A\"\
+    \n        }\n      ]\n    }\n  ],\n  \"schemaVersion\": 38,\n  \"tags\": [\"palantir-nq\"\
+    , \"dream-team\", \"levels\"],\n  \"timezone\": \"America/New_York\",\n  \"title\"\
+    : \"Dream Team Indicators\",\n  \"uid\": \"dream-team-levels\",\n  \"version\"\
+    : 1\n}"
