@@ -9,6 +9,7 @@ resources:
   - grafana-dashboard-kubernetes-node-metrics.yaml
   - grafana-dashboard-kubernetes-pod-metrics.yaml
   - grafana-dashboard-kubernetes-workloads.yaml
+  - grafana-dashboard-network-snmp-switch.yaml
   - grafana-dashboard-proxmox-cluster-overview.yaml
   - grafana-dashboard-proxmox-nodes-overview.yaml
   - grafana-dashboard-proxmox-storage-metrics.yaml

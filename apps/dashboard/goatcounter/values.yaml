@@ -1,0 +1,104 @@
+# GoatCounter analytics for docs.herro.me (and any other static site we want
+# to track later). Rendered via bjw-s/app-template 3.5.1 with `make all`.
+#
+# Operational notes:
+# - SQLite database lives on NFS (k8s-nfs StorageClass). NEVER use
+#   `kubectl rollout restart` on this deployment, the same way we never
+#   restart the *arr apps. Scale down then up:
+#       kubectl scale deploy goatcounter -n dashboard --replicas=0 \
+#         && sleep 5 \
+#         && kubectl scale deploy goatcounter -n dashboard --replicas=1
+# - First-run bootstrap (creating the docs.herro.me site row and admin user)
+#   is a manual `kubectl exec`. See ./README.md.
+# - NPM (192.168.1.150) reverse-proxies gc.herro.me to 192.168.1.227:8080
+#   and terminates TLS. GoatCounter itself runs plain HTTP inside the
+#   cluster, so `-tls=none` is set below.
+
+controllers:
+  main:
+    type: deployment
+    replicas: 1
+    strategy: Recreate
+    pod:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+    containers:
+      main:
+        image:
+          repository: arp242/goatcounter
+          # Pin to a known-good tag. Bump deliberately, never use :latest.
+          # Upstream tags are unprefixed (no leading "v"); see Docker Hub.
+          tag: "2.7.0"
+          pullPolicy: IfNotPresent
+        command: ["goatcounter"]
+        args:
+          - "serve"
+          - "-listen=:8080"
+          - "-tls=none"
+          - "-db=sqlite+/home/user/.local/share/goatcounter/db/goatcounter.sqlite3"
+          - "-automigrate"
+        env:
+          TZ: "America/Los_Angeles"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop: ["ALL"]
+        ports:
+          - name: http
+            containerPort: 8080
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        probes:
+          startup:
+            enabled: true
+            custom: true
+            spec:
+              tcpSocket: { port: 8080 }
+              initialDelaySeconds: 5
+              periodSeconds: 5
+              failureThreshold: 60
+          liveness:
+            enabled: true
+            custom: true
+            spec:
+              tcpSocket: { port: 8080 }
+              periodSeconds: 30
+              failureThreshold: 5
+          readiness:
+            enabled: true
+            custom: true
+            spec:
+              httpGet: { path: "/status", port: 8080 }
+              periodSeconds: 10
+              failureThreshold: 3
+
+service:
+  main:
+    controller: main
+    type: LoadBalancer
+    loadBalancerIP: 192.168.1.227
+    ports:
+      http:
+        port: 8080
+        targetPort: http
+
+persistence:
+  data:
+    enabled: true
+    accessMode: ReadWriteOnce
+    size: 1Gi
+    storageClass: k8s-nfs
+    globalMounts:
+      - path: /home/user/.local/share/goatcounter

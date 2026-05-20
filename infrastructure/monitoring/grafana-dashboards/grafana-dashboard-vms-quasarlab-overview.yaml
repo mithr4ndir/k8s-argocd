@@ -270,10 +270,10 @@ data:
         {
           "id": 6,
           "type": "stat",
-          "title": "Pending Security Updates",
+          "title": "Security Updates",
           "gridPos": {
             "h": 4,
-            "w": 4,
+            "w": 2,
             "x": 16,
             "y": 1
           },
@@ -307,6 +307,63 @@ data:
                   {
                     "color": "orange",
                     "value": 5
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 100,
+          "type": "stat",
+          "title": "All Updates",
+          "description": "Total pending apt upgrades across all repos including third-party (Kubernetes, HashiCorp, Vector, Wazuh, etc.). Mirrors the count surfaced by the MOTD apt-check on SSH login.",
+          "gridPos": {
+            "h": 4,
+            "w": 2,
+            "x": 18,
+            "y": 1
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "expr": "sum(apt_upgrades_pending_total{job=\"vm-node-exporter\"}) or vector(0)",
+              "legendFormat": "",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "blue",
+                    "value": 1
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 20
                   }
                 ]
               }

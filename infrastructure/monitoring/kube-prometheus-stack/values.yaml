@@ -23,6 +23,26 @@ kube-prometheus-stack:
             - files:
                 - /etc/prometheus/file_sd/vm-targets.json
               refresh_interval: 1m
+        - job_name: 'snmp-switch'
+          metrics_path: /snmp
+          params:
+            module: [if_mib]
+            auth: [switch_v2c]
+          static_configs:
+            - targets:
+                - '192.168.1.2'
+              labels:
+                instance: 'lab-sw01'
+                device_type: 'switch'
+                vendor: 'tplink'
+                model: 'TL-SG2016P'
+          relabel_configs:
+            - source_labels: [__address__]
+              target_label: __param_target
+            - source_labels: [__param_target]
+              target_label: instance
+            - target_label: __address__
+              replacement: snmp-exporter-prometheus-snmp-exporter.monitoring.svc.cluster.local:9116
       volumes:
         - name: file-sd-targets
           configMap:
@@ -663,6 +683,55 @@ kube-prometheus-stack:
               annotations:
                 summary: "Security enforcement hasn't run in over 1 hour on {{ $labels.instance }}"
                 description: "Last security timer run was {{ $value | humanizeDuration }} ago on {{ $labels.instance }}. Wazuh/CrowdSec config enforcement is not converging."
+
+    snmp-network-alerts:
+      groups:
+        - name: snmp-availability
+          rules:
+            - alert: SnmpExporterDown
+              expr: up{job="snmp-switch"} == 0
+              for: 3m
+              labels:
+                severity: critical
+              annotations:
+                summary: "SNMP scrape of {{ $labels.instance }} failing"
+                description: "Prometheus has been unable to scrape SNMP target {{ $labels.instance }} for 3 minutes. Either snmp-exporter is down or the device is unreachable. Check `kubectl -n monitoring logs deploy/snmp-exporter-prometheus-snmp-exporter` and ping the target."
+        - name: snmp-link-status
+          rules:
+            - alert: SwitchUplinkDown
+              expr: ifOperStatus{job="snmp-switch", ifAlias=~"(?i).*(uplink|pfsense|wan).*"} != 1
+              for: 1m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Switch uplink {{ $labels.ifName }} on {{ $labels.instance }} is down"
+                description: "Interface {{ $labels.ifName }} (alias '{{ $labels.ifAlias }}') has ifOperStatus != up for 1 minute. The switch's path to pfSense is broken. Check cable and pfSense LAN port status."
+            - alert: SwitchPortDown
+              expr: ifOperStatus{job="snmp-switch", ifAdminStatus="1"} == 2
+              for: 5m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Switch port {{ $labels.ifName }} on {{ $labels.instance }} is down"
+                description: "Interface {{ $labels.ifName }} (alias '{{ $labels.ifAlias }}') is administratively up but operationally down for 5 minutes. Cable, link partner, or speed/duplex mismatch."
+        - name: snmp-link-quality
+          rules:
+            - alert: SwitchInterfaceErrors
+              expr: rate(ifInErrors{job="snmp-switch"}[5m]) + rate(ifOutErrors{job="snmp-switch"}[5m]) > 1
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Errors on {{ $labels.instance }} interface {{ $labels.ifName }}"
+                description: "Interface {{ $labels.ifName }} (alias '{{ $labels.ifAlias }}') is seeing >1 packet error/sec for 10m. Likely cable, SFP, or duplex problem."
+            - alert: SwitchInterfaceDiscards
+              expr: rate(ifInDiscards{job="snmp-switch"}[5m]) + rate(ifOutDiscards{job="snmp-switch"}[5m]) > 10
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Packet discards on {{ $labels.instance }} interface {{ $labels.ifName }}"
+                description: "Interface {{ $labels.ifName }} (alias '{{ $labels.ifAlias }}') is discarding >10 packets/sec for 10m. Either congestion or buffer exhaustion."
 
     media-service-health:
       groups:

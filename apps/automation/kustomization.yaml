@@ -3,4 +3,12 @@ kind: Kustomization
 namespace: automation
 resources:
   - automation-namespace.yaml
-  - claude-bridge/
+  # claude-bridge temporarily disabled (2026-05-06) while 1P backing items
+  # are sorted out. ExternalSecret retries against missing items were
+  # piling on 429s during a cap-exhausted window. Re-enable once Unit 10
+  # 1P items (token, hmac current/previous, allowlist user_ids,
+  # api-key-local-hook, api-key-remote-agent, postgres dsn/migrate_dsn)
+  # are validated in the Infrastructure vault.
+  # - claude-bridge/
+  - donchian-signal/
+  - dream-team/

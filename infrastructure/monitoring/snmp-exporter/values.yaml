@@ -1,0 +1,35 @@
+prometheus-snmp-exporter:
+  replicas: 1
+
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+
+  service:
+    type: ClusterIP
+    port: 9116
+
+  serviceMonitor:
+    enabled: false
+
+  # Load the container's bundled /etc/snmp_exporter/snmp.yml (full module
+  # definitions for if_mib and every other vendor MIB) AND our auths-only
+  # file from a Secret. snmp_exporter v0.30+ merges multiple --config.file
+  # invocations.
+  extraArgs:
+    - --config.file=/etc/snmp_exporter/snmp.yml
+    - --config.file=/etc/snmp_exporter/auths.yml
+
+  extraSecretMounts:
+    - name: snmp-exporter-config
+      mountPath: /etc/snmp_exporter/auths.yml
+      subPath: auths.yml
+      secretName: snmp-exporter-config
+      readOnly: true
+      defaultMode: 420
+
+  podAnnotations:
+    reloader.stakater.com/auto: "true"
