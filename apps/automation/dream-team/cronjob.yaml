@@ -1,0 +1,70 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: dream-team-dream-team
+  namespace: automation
+  labels:
+    app.kubernetes.io/name: dream-team
+    app.kubernetes.io/instance: dream-team
+    app.kubernetes.io/version: 0.1.2
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: dream-team
+spec:
+  schedule: 0 8 * * MON-FRI
+  timeZone: America/New_York
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 7
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: dream-team
+            app.kubernetes.io/instance: dream-team
+            app.kubernetes.io/version: 0.1.2
+            app.kubernetes.io/managed-by: Helm
+            app.kubernetes.io/component: dream-team
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            fsGroup: 65532
+            runAsGroup: 65532
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - name: levels
+            image: ghcr.io/mithr4ndir/palantir-nq:0.1.2
+            imagePullPolicy: IfNotPresent
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - ALL
+              readOnlyRootFilesystem: true
+            args:
+            - -m
+            - nq_ibb.forward.dream_team_cron
+            envFrom:
+            - secretRef:
+                name: dream-team-dream-team-secrets
+            env:
+            - name: HOME
+              value: /tmp
+            resources:
+              limits:
+                cpu: 500m
+                memory: 512Mi
+              requests:
+                cpu: 100m
+                memory: 256Mi
+            volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          volumes:
+          - name: tmp
+            emptyDir: {}
