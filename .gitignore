@@ -6,3 +6,6 @@
 # Helm
 **/charts/
 *.tgz
+
+# Local MCP config
+.mcp.json
