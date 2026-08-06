@@ -562,6 +562,12 @@ kube-prometheus-stack:
 
     wazuh-health:
       groups:
+        # Liveness. Necessary but demonstrably not sufficient: on 2026-08-06 the
+        # SIEM was found to have been collecting nothing for months, and all four
+        # of these rules were green the entire time. wazuh-manager, wazuh-indexer
+        # and wazuh-dashboard were active, and filebeat.service was active while
+        # failing to reach the indexer across 15,403 reconnect attempts.
+        # The wazuh-data-flow group below alerts on absence of data instead.
         - name: wazuh-services
           rules:
             - alert: WazuhManagerDown
@@ -596,6 +602,102 @@ kube-prometheus-stack:
               annotations:
                 summary: "Filebeat is down on {{ $labels.instance }}"
                 description: "filebeat.service is not active on {{ $labels.instance }}. Wazuh alerts are not being shipped to the indexer."
+
+        # Data flow. These alert on the absence of data, which is the only thing
+        # either 2026-08-06 failure actually changed.
+        #
+        #   1. No agent could enroll: the manager was missing the agent groups the
+        #      agents requested, so authd rejected every enrollment and
+        #      client.keys stayed empty. Agents log only "Unable to connect to any
+        #      server", which reads like a firewall problem and is not.
+        #   2. Filebeat was auto-upgraded past 7.10.2 and could no longer talk to
+        #      OpenSearch, so nothing reached the indexer after 2026-04-10.
+        #
+        # Metrics come from the wazuh-indexer-metrics collector (ansible role
+        # wazuh_indexer_metrics) via the node_exporter textfile collector.
+        - name: wazuh-data-flow
+          rules:
+            - alert: WazuhIndexerAlertsStale
+              # The single most important rule here: it goes red regardless of
+              # which link in manager -> filebeat -> indexer broke. The SIEM
+              # normally indexes ~20 alerts/minute, so an hour of total silence is
+              # a failure, never a quiet period.
+              expr: time() - wazuh_indexer_alerts_last_document_timestamp_seconds > 3600
+              for: 15m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Wazuh has indexed no alerts for {{ $value | humanizeDuration }}"
+                description: |
+                  No new document has reached wazuh-alerts-* in over an hour. The
+                  SIEM is blind and every service will still look healthy. This
+                  exact condition went unnoticed for ~4 months in 2026. Check:
+                  1) `filebeat test output` on the manager. A 400 on `_license`
+                  means Filebeat was upgraded past 7.10.2 and cannot talk to
+                  OpenSearch; reinstall filebeat-oss 7.10.2 and hold it.
+                  2) `tail /var/ossec/logs/alerts/alerts.json` to confirm the
+                  manager is still producing alerts at all.
+                  3) Indexer disk usage; a full disk flips indices to read-only.
+            - alert: WazuhNoAgentsReporting
+              # Only the manager (agent 000) reporting is the exact signature of
+              # authd rejecting every agent enrollment.
+              expr: wazuh_indexer_agents_reporting <= 1
+              for: 30m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Only {{ $value }} Wazuh agent(s) reporting"
+                description: |
+                  At most one agent has produced an alert in the last hour, which
+                  usually means the manager itself and nothing else. Check
+                  `/var/ossec/bin/agent_control -l` and
+                  `grep 'Invalid group' /var/ossec/logs/ossec.log` on the manager:
+                  a missing agent group makes authd reject the whole enrollment.
+            - alert: WazuhAgentsPartiallyReporting
+              # Below expected fleet size but not zero. NodeDown covers a host
+              # being down; this covers a host being up but no longer shipping.
+              expr: wazuh_indexer_agents_reporting < 10
+              for: 1h
+              labels:
+                severity: warning
+              annotations:
+                summary: "Only {{ $value }} Wazuh agents reporting (expected 14)"
+                description: |
+                  Fewer agents than expected produced alerts in the last hour. If
+                  no NodeDown is firing, the hosts are up but their agents are not
+                  shipping. Compare `/var/ossec/bin/agent_control -l` against the
+                  Ansible inventory.
+            - alert: WazuhIndexerUnreachable
+              # Distinct from WazuhIndexerDown above: the unit can be active while
+              # the indexer refuses queries or the client cert has expired.
+              expr: wazuh_indexer_up == 0
+              for: 15m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Wazuh Indexer is not answering queries"
+                description: |
+                  The freshness collector could not query the Wazuh Indexer for 15
+                  minutes even though the systemd unit may be active. Check
+                  `systemctl status wazuh-indexer` and the admin client
+                  certificate under /etc/wazuh-indexer/certs/.
+
+        # Self-monitoring. A staleness alert that silently stops running has the
+        # same failure mode as the outage it exists to catch.
+        - name: wazuh-collector-health
+          rules:
+            - alert: WazuhIndexerMetricsCollectorStale
+              expr: (time() - wazuh_indexer_metrics_last_run_timestamp_seconds > 1800) or absent(wazuh_indexer_metrics_last_run_timestamp_seconds)
+              for: 15m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Wazuh freshness collector has not run"
+                description: |
+                  wazuh-indexer-metrics.timer has not produced a sample in over 30
+                  minutes, or the metric has disappeared entirely. While this is
+                  firing, the wazuh-data-flow alerts are not trustworthy. Check
+                  `systemctl status wazuh-indexer-metrics.timer` on the manager.
 
     system-updates:
       groups:
