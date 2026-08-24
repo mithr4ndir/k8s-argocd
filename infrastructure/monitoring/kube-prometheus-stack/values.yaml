@@ -719,14 +719,62 @@ kube-prometheus-stack:
               annotations:
                 summary: "{{ $labels.instance }} unattended-upgrades failed"
                 description: "Automatic security updates failed on {{ $labels.instance }}. Check /var/log/unattended-upgrades/."
+            # Was `> 0 for 24h`, which fired continuously on 8 of 16 hosts and had
+            # been firing on pve for weeks before the 2026-08-12 apt-daily hang
+            # started. Permanently-on means it carried no signal: it could not
+            # distinguish "pve stopped patching entirely for 11 days" from a
+            # normal day. min_over_time means we only fire when the count never
+            # once reached zero across a whole week, which is the actual "this
+            # host is not working its queue down" condition.
+            #
+            # Known remaining noise: hosts whose pending security packages are
+            # deliberately blacklisted never reach zero, so they still fire
+            # (jellyfin and k8cluster2 on nvidia-*, k8cluster1/3 on kernel
+            # metapackages). Fixing that properly means making the metric count
+            # only what unattended-upgrades would actually install rather than
+            # everything in the -security pocket. Tracked separately.
             - alert: SecurityUpdatesPending
-              expr: unattended_upgrades_pending_security{job="vm-node-exporter"} > 0
-              for: 24h
+              expr: min_over_time(unattended_upgrades_pending_security{job="vm-node-exporter"}[7d]) > 0
+              for: 12h
               labels:
                 severity: warning
               annotations:
-                summary: "{{ $labels.instance }} has {{ $value }} pending security updates"
-                description: "{{ $labels.instance }} has had pending security updates for over 24 hours."
+                summary: "{{ $labels.instance }} is not working down its security updates"
+                description: "{{ $labels.instance }} has not reached zero pending security updates at any point in the last 7 days. Either unattended-upgrades is not applying them, or the remaining ones are blacklisted. Check `unattended-upgrade --dry-run --debug` on the host."
+
+            # Catches the 2026-08-12 pve failure directly and within the hour.
+            # A hung apt-daily oneshot pins itself in "activating", and systemd
+            # will not re-trigger a timer whose service is still activating, so
+            # both apt timers go to NEXT=n/a and the host stops patching
+            # entirely. On pve that ran for 10 days before anyone noticed, and
+            # only surfaced because the held lists lock broke interactive
+            # `apt update`. A healthy run finishes in seconds, so an hour in
+            # "activating" is already far outside normal.
+            - alert: AptDailyStuck
+              expr: node_systemd_unit_state{job="vm-node-exporter", name=~"apt-daily(-upgrade)?\\.service", state="activating"} == 1
+              for: 1h
+              labels:
+                severity: warning
+              annotations:
+                summary: "{{ $labels.name }} stuck activating on {{ $labels.instance }}"
+                description: "{{ $labels.name }} has been in the activating state on {{ $labels.instance }} for over an hour, which means a fetch is hung. While it stays there its timer cannot re-fire, so this host has silently stopped patching. Fix: `systemctl stop {{ $labels.name }}` on the host, then confirm `systemctl list-timers apt-daily apt-daily-upgrade` shows a real NEXT again."
+
+        # Absence-of-data companion to the group above. The rules there all
+        # read from the apt cache, so anything that stops the cache updating
+        # also freezes them: during the pve hang unattended_upgrades_pending_security
+        # sat frozen at 13 for 11 days and looked entirely normal. This rule
+        # reads the last-run timestamp instead, which keeps advancing only if
+        # unattended-upgrades genuinely runs.
+        - name: unattended-upgrades-freshness
+          rules:
+            - alert: UnattendedUpgradesStale
+              expr: time() - unattended_upgrades_last_run_timestamp_seconds{job="vm-node-exporter"} > 3 * 86400
+              for: 1h
+              labels:
+                severity: warning
+              annotations:
+                summary: "{{ $labels.instance }} has not run unattended-upgrades in over 3 days"
+                description: "unattended-upgrades last completed on {{ $labels.instance }} more than 3 days ago. It is scheduled daily, so this means the apt timers are not firing (see AptDailyStuck) or the service is broken. A value far in the future here means the metric reports 0, which is the sentinel for never ran."
 
     service-down-alerts:
       groups:
@@ -740,8 +788,15 @@ kube-prometheus-stack:
               annotations:
                 summary: "{{ $labels.name }} is down on {{ $labels.instance }}"
                 description: "Systemd unit {{ $labels.name }} has been in failed state on {{ $labels.instance }} for 2 minutes."
+            # type!="oneshot" matters. A oneshot that has completed successfully
+            # sits in "inactive" until its timer fires again, which is the normal
+            # healthy state, not an outage. Without this exclusion, adding the apt
+            # daily units to the scrape baseline fired ServiceInactive on all 12
+            # hosts at once. Failed oneshots are still caught by ServiceDown above,
+            # and a oneshot that stops running entirely is caught by AptDailyStuck
+            # and UnattendedUpgradesStale.
             - alert: ServiceInactive
-              expr: node_systemd_unit_state{job="vm-node-exporter", state="active"} == 0 and ignoring(state) node_systemd_unit_state{job="vm-node-exporter", state="failed"} == 0
+              expr: node_systemd_unit_state{job="vm-node-exporter", state="active", type!="oneshot"} == 0 and ignoring(state) node_systemd_unit_state{job="vm-node-exporter", state="failed", type!="oneshot"} == 0
               for: 5m
               labels:
                 severity: warning
