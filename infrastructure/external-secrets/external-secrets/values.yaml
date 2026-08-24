@@ -19,6 +19,24 @@ external-secrets:
   # overwhelming upstream secret providers (1Password, Vault, etc.)
   concurrent: 1
 
+  extraArgs:
+    # Back off store validation from the 5m default.
+    #
+    # The flood gate (--enable-flood-gate, on by default) already stops
+    # ExternalSecret reconciles from reaching 1Password while the store is
+    # unhealthy: they fail locally with "ClusterSecretStore is not ready" and
+    # cost nothing. The store reconciler itself is the only path that still
+    # calls 1Password, and at 5m it spends ~290 calls/day against a 1000/day
+    # account cap purely to re-confirm the store is still broken.
+    #
+    # On 2026-08-23 the account cap was exhausted at 06:00 and stayed pinned
+    # for 18h; that re-check traffic is pure overhead during exactly the window
+    # where the quota is scarcest. 15m cuts it to ~96/day.
+    #
+    # Tradeoff: recovery after a quota reset takes up to 15m instead of 5m.
+    # ExternalSecrets refresh on a 24h interval anyway, so this is not material.
+    store-requeue-interval: 15m
+
   # ServiceMonitor so kube-prometheus-stack scrapes ESO metrics.
   # Needed so ExternalSecretSyncError alerts fire on retry loops
   # before they drain the 1Password daily cap (2026-04-18 incident).
