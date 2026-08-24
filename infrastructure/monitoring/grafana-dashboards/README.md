@@ -26,25 +26,60 @@ Any ConfigMap in the `monitoring` namespace labelled `grafana_dashboard: "1"`
 is picked up and filed under the folder in its `grafana_folder` annotation. No
 restart needed.
 
-## UI edits do not persist
+## UI edits persist, and will silently outrank this repo
 
-`grafana.persistence.enabled` is `false`, so Grafana has no PVC. `allowUiUpdates`
-lets you edit in the browser, but **the pod restarting throws that away.** To
-keep a change:
+This is the opposite of what you might assume from `persistence.enabled: false`.
+That setting only removes the pod's PVC. Grafana stores dashboards in **external
+PostgreSQL** (`192.168.1.123:5432`, configured under `grafana.ini.database` in
+the chart values), so a dashboard edited in the browser is written to that
+database and **survives pod restarts**.
 
-1. Edit in Grafana, then **Dashboard settings → JSON Model → copy**, or use
-   Share → Export.
-2. Save it somewhere temporary and convert it:
+The sidecar provisioner runs with:
 
-   ```bash
-   scripts/dashboard-to-configmap.py /tmp/jellyfin.json --folder VMs --name vms-jellyfin
-   ```
+```yaml
+allowUiUpdates: true
+updateIntervalSeconds: 30
+```
 
-3. Commit the regenerated ConfigMap. ArgoCD syncs it and the sidecar reloads.
+`allowUiUpdates: true` lets you edit a provisioned dashboard in the UI. Grafana's
+file provisioner will then not overwrite it unless the file's `version` is
+**higher** than the version stored in the database. Every dashboard here ships
+`version: 1`, and saving in the UI bumps the stored copy past that.
+
+So a UI edit becomes the live truth and this repo quietly stops being applied to
+that dashboard. That is not hypothetical: it is a second mechanism for exactly
+the drift described under History below.
+
+## Committing a change back
+
+```bash
+# 1. In Grafana: Dashboard settings -> JSON Model -> copy, or Share -> Export.
+#    The export carries the current stored version, which matters for step 2.
+# 2. Convert. The version is incremented by default so the file outranks
+#    whatever is in the database and provisioning actually applies it.
+scripts/dashboard-to-configmap.py /tmp/jellyfin.json --folder VMs --name vms-jellyfin
+```
+
+Flags:
+
+| Flag | Effect |
+|---|---|
+| *(default)* | `version` = input version + 1, so the file wins |
+| `--version N` | set an explicit version, if a dashboard was edited repeatedly |
+| `--keep-version` | leave `version` untouched |
+
+Then commit the regenerated ConfigMap; ArgoCD syncs it and the sidecar reloads
+within `updateIntervalSeconds`.
 
 Do not hand-edit the JSON embedded in these files. The script parses the export
-first, so a malformed dashboard fails locally rather than landing in the cluster
-as something Grafana refuses to render.
+and rejects anything whose `panels` is not a list, so a malformed dashboard fails
+locally rather than landing in the cluster as something Grafana will not render.
+
+!!! note
+    If you want this repo to be strictly authoritative and UI edits to be
+    impossible, set `allowUiUpdates: false` in the chart values. That is a
+    deliberate trade: it also stops people iterating on a dashboard in the
+    browser, which is how most of these were built.
 
 ## History
 

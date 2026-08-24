@@ -40,6 +40,10 @@ def main() -> int:
     ap.add_argument("--folder", required=True, help='Grafana folder, e.g. "VMs"')
     ap.add_argument("--name", required=True, help="suffix after grafana-dashboard-")
     ap.add_argument("--filename", help="key inside data: (default: <last-name-segment>.json)")
+    ap.add_argument("--version", type=int,
+                    help="set an explicit dashboard version (default: input version + 1)")
+    ap.add_argument("--keep-version", action="store_true",
+                    help="do not touch the version field")
     ap.add_argument("-o", "--out", type=pathlib.Path)
     a = ap.parse_args()
 
@@ -50,9 +54,27 @@ def main() -> int:
     except json.JSONDecodeError as e:
         print(f"error: {a.dashboard} is not valid JSON: {e}", file=sys.stderr)
         return 1
-    if not isinstance(parsed, dict) or "panels" not in parsed:
-        print(f"error: {a.dashboard} has no 'panels' key; is it a dashboard export?", file=sys.stderr)
+    if not isinstance(parsed, dict):
+        print(f"error: {a.dashboard} is not a JSON object; is it a dashboard export?", file=sys.stderr)
         return 1
+    # Check the type, not just presence. "panels": {} or "panels": null both pass
+    # a bare `in` test and would be written out as a dashboard Grafana refuses to
+    # render -- with null also crashing this script after the file was written.
+    if not isinstance(parsed.get("panels"), list):
+        got = type(parsed.get("panels")).__name__ if "panels" in parsed else "absent"
+        print(f"error: {a.dashboard} 'panels' must be a list, got {got}; is it a dashboard export?",
+              file=sys.stderr)
+        return 1
+
+    # Grafana's file provisioner will not overwrite a dashboard that has been
+    # edited in the UI unless the file's version is higher than the stored one,
+    # and allowUiUpdates is true here. A Grafana export carries the current
+    # stored version, so incrementing it is what makes this ConfigMap win.
+    if a.version is not None:
+        parsed["version"] = a.version
+    elif not a.keep_version:
+        current = parsed.get("version")
+        parsed["version"] = (current if isinstance(current, int) else 0) + 1
 
     filename = a.filename or f"{a.name.split('-')[-1]}.json"
     body = "\n".join("    " + line for line in json.dumps(parsed, indent=2).splitlines())
@@ -62,7 +84,7 @@ def main() -> int:
         f"infrastructure/monitoring/grafana-dashboards/grafana-dashboard-{a.name}.yaml"
     )
     dest.write_text(out_text)
-    print(f"wrote {dest} ({len(parsed['panels'])} panels)")
+    print(f"wrote {dest} ({len(parsed['panels'])} panels, version {parsed.get('version')})")
     return 0
 
 
