@@ -265,6 +265,33 @@ kube-prometheus-stack:
               annotations:
                 summary: "{{ $labels.instance }} disk > 95% on {{ $labels.mountpoint }}"
                 description: "{{ $labels.instance }} filesystem {{ $labels.mountpoint }} is {{ $value | printf \"%.1f\" }}% full. Immediate action required."
+            # Adds lead time ahead of the static DiskSpace* thresholds, which
+            # work correctly but can only react once the disk is already nearly
+            # full. On 2026-08-24 jellyfin's / went 33% -> 98% in 90 minutes as
+            # seven concurrent transcodes wrote whole-title HLS output.
+            # DiskSpaceLow behaved exactly as configured -- pending at 03:15:00
+            # on the 85% crossing, firing at 03:25:00 -- but that left roughly
+            # eight minutes before the filesystem would have been full. This
+            # projects the trend instead of waiting for a level: replayed
+            # against the same incident it is satisfied from 02:28, so with
+            # for:10m it fires around 02:38, about 47 minutes earlier. Replayed
+            # fleet-wide over the preceding 7 days it matches nothing else.
+            - alert: DiskFillingFast
+              expr: |-
+                (
+                  predict_linear(node_filesystem_avail_bytes{job="vm-node-exporter", fstype=~"ext4|xfs|zfs", mountpoint!~"/boot.*"}[30m], 2 * 3600) < 0
+                )
+                and on(instance, mountpoint) (
+                  node_filesystem_avail_bytes{job="vm-node-exporter", fstype=~"ext4|xfs|zfs", mountpoint!~"/boot.*"}
+                  / node_filesystem_size_bytes{job="vm-node-exporter", fstype=~"ext4|xfs|zfs", mountpoint!~"/boot.*"}
+                  < 0.50
+                )
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "{{ $labels.instance }} {{ $labels.mountpoint }} is filling fast"
+                description: "{{ $labels.instance }} filesystem {{ $labels.mountpoint }} is on track to run out of space within 2 hours at the current rate. Check the transcode cache and journald before it wedges anything writing to that disk."
             - alert: HighSystemLoad
               expr: node_load15{job="vm-node-exporter"} / count without(cpu) (count without(mode) (node_cpu_seconds_total{job="vm-node-exporter", mode="idle"})) > 2
               for: 15m
