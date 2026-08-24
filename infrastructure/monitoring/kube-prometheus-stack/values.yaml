@@ -843,6 +843,18 @@ kube-prometheus-stack:
               annotations:
                 summary: "{{ $labels.playbook }} failed — hosts: {{ $labels.failed_hosts }}"
                 description: "Playbook {{ $labels.playbook }} failed on hosts: {{ $labels.failed_hosts }}. Check /var/log/ansible-quasarlab/ on {{ $labels.instance }}."
+            # The runners refuse to execute when they cannot pin their automation
+            # checkout to origin/main, and write this metric on the way out. Without
+            # it a refused run is only visible as AnsibleRunStale an hour later, and
+            # says nothing about why. See ansible-quasarlab scripts/lib/sync-repo.sh.
+            - alert: AnsibleRepoSyncFailed
+              expr: ansible_run_repo_sync_success{job="vm-node-exporter"} == 0 or ansible_security_run_repo_sync_success{job="vm-node-exporter"} == 0
+              for: 5m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Ansible cannot pin {{ $labels.repo }} to its release branch"
+                description: "{{ $labels.instance }} refused to run scheduled playbooks because {{ $labels.repo }} could not be synced to its pinned ref. No configuration is being enforced until this is fixed."
             - alert: AnsibleRunStale
               expr: time() - ansible_run_timestamp_seconds{job="vm-node-exporter"} > 3600
               for: 10m
