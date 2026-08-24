@@ -18,6 +18,11 @@ spec:
   startingDeadlineSeconds: 600
   jobTemplate:
     spec:
+      # Age out finished Jobs after 7 days. failedJobsHistoryLimit caps how MANY
+      # failed Jobs are kept, not how long, so a small number of failures sits in
+      # the API server forever and keeps KubeJobFailed firing on ancient history.
+      # Two dream-team Jobs from 46 and 17 days ago were still alerting this way.
+      ttlSecondsAfterFinished: 604800
       backoffLimit: 2
       template:
         metadata:
