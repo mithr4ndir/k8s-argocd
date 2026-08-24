@@ -27,7 +27,7 @@ data:
         "to": "now"
       },
       "schemaVersion": 39,
-      "version": 1,
+      "version": 2,
       "templating": {
         "list": [
           {
