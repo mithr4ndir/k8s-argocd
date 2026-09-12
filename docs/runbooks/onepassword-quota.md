@@ -1,6 +1,6 @@
 # Runbook: 1Password Quota Alerts
 
-Applies to: `OnePasswordQuotaHalfConsumed`, `OnePasswordQuotaLow`, `OnePasswordQuotaCritical`, `OnePasswordQuotaExhausted`, `OnePasswordQuotaCollectorStale`.
+Applies to: `OnePasswordQuotaBurnRateHigh`, `OnePasswordQuotaHalfConsumed`, `OnePasswordQuotaLow`, `OnePasswordQuotaCritical`, `OnePasswordQuotaExhausted`, `OnePasswordQuotaCollectorStale`.
 
 ## Why you were paged
 
@@ -90,6 +90,21 @@ Look at Grafana **1Password Quota** dashboard, "24h account usage" panel for the
 | `Exhausted` fires out of the blue | Interactive `op` testing without caching | Use the wrappers in [scripts/lib/op-secret-cache.sh](https://github.com/mithr4ndir/ansible-quasarlab/blob/main/scripts/lib/op-secret-cache.sh), not raw `op` loops |
 | `CollectorStale` alone (no quota alert) | Collector script itself failed. Token unreadable, `op` missing, kill switch tripped but not cleared | `journalctl -t op-quota-collector -n 50` |
 | `QuotaLow` but `reset` says 23 hours | Someone just started the window with a burst. Will resolve as the window slides or when they stop | Watch for 1 hour. If slope stays flat/decreasing, ignore |
+
+## Burn Rate Alert
+
+Applies to: `OnePasswordQuotaBurnRateHigh` (warning, more than 50 account reads in the trailing hour).
+
+This fires on the speed of consumption, not on what is left, so it catches a burst within a minute of it starting instead of hours later when `remaining` finally drops. Normal baseline is under 15 reads/hour. On 2026-09-12 three bursts (+160 at 04:18, +160 at 05:18, +94 at 14:33 UTC) were 74% of the day's usage and none of them paged.
+
+The quota gauge drops once a day when the window rolls (for example 831 to 45). The rule sums only the positive 1m steps of `onepassword_ratelimit_used` over 1h, so that drop counts as zero burn. Do not "simplify" it to `increase()`: that treats the drop as a counter reset and counts the post-reset value as new burn, which false-fired at both resets in a 48h backtest.
+
+### Triage
+
+1. Open the Grafana **1Password Quota** dashboard, "Account Burn Rate" panel, and note when the climb started.
+2. On command-center1: `journalctl -t op-wrapper --since -1h` to find the caller.
+3. Usual suspects: an ansible run that resolved the dynamic Proxmox inventory, a playbook rerun loop, or an ESO retry loop (check `ExternalSecretSyncErrorBurst`).
+4. If the burst is ongoing and the cause is not obvious, trip the kill switch (step 1 above) before the daily cap drains.
 
 ## ExternalSecret Retry Alerts
 
