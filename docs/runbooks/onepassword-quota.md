@@ -66,7 +66,7 @@ Leave ESO down until the `RESET` window in step 1 passes AND `remaining` climbs 
 
 ### 3. Identify the top consumer
 
-The collector alone uses 96 requests/day (every 15 min). ESO contributes the largest variable share. Interactive `op` testing during an outage adds a spike. If this fires outside of a post-incident period, something changed.
+The collector itself costs nothing: `op-quota-collector.timer` fires every 5 minutes (`OnCalendar=*:0/5`, 288 runs/day), and the only call it makes, `op service-account ratelimit`, does not count against the quota (see Confirm current state above). ESO contributes the largest variable share. Interactive `op` testing during an outage adds a spike. If this fires outside of a post-incident period, something changed.
 
 Look at Grafana **1Password Quota** dashboard, "24h account usage" panel for the rate-of-change slope. Correlate spikes against:
 
@@ -95,9 +95,40 @@ Look at Grafana **1Password Quota** dashboard, "24h account usage" panel for the
 
 Applies to: `OnePasswordQuotaBurnRateHigh` (warning, more than 50 account reads in the trailing hour).
 
-This fires on the speed of consumption, not on what is left, so it catches a burst within a minute of it starting instead of hours later when `remaining` finally drops. Normal baseline is under 15 reads/hour. On 2026-09-12 three bursts (+160 at 04:18, +160 at 05:18, +94 at 14:33 UTC) were 74% of the day's usage and none of them paged.
+This fires on the speed of consumption, not on what is left, so it catches a burst minutes after it starts instead of hours later when `remaining` finally drops. Normal baseline is under 15 reads/hour. On 2026-09-12 three bursts (+160 at 04:18, +160 at 05:18, +94 at 14:33 UTC) were 74% of the day's usage and none of them paged.
 
-The quota gauge drops once a day when the window rolls (for example 831 to 45). The rule sums only the positive 1m steps of `onepassword_ratelimit_used` over 1h, so that drop counts as zero burn. Do not "simplify" it to `increase()`: that treats the drop as a counter reset and counts the post-reset value as new burn, which false-fired at both resets in a 48h backtest.
+### How the rule counts reads
+
+The quota gauge drops once a day when the window rolls (for example 831 to 45), and the account counter restarts from zero. The rule scores every 1m step of `onepassword_ratelimit_used` over the trailing hour:
+
+- Ordinary step: the climb since the previous minute. A decrease that is not a rollover scores 0.
+- Rollover step: the whole post-reset value, because every read it shows happened after the reset. A rollover is recognised by `onepassword_ratelimit_reset_seconds` jumping up by more than an hour. Between rolls it only counts down; at both rolls in the 48h before this change it went 240 to 82800.
+
+The first version of the rule (#200) clamped the rollover step to 0, which silently discarded every read between the reset and the first post-reset sample (#201). On 2026-09-13 that was 125 account reads in one sample, during a burst the collector's own token counter confirms (hourly token reads 4 to 254 between 02:46 and 02:51 UTC). The fixed rule pages on it.
+
+Reads made after the last pre-reset sample but before the reset itself are still invisible, because the counter they landed in is gone by the next sample. That gap is at most one collector interval.
+
+Do not "simplify" the rule to `increase()`: that treats any drop, not just a rollover, as a counter reset, and it has no way to tell a collector glitch from a real roll.
+
+### Detection latency
+
+The rule cannot see a read until the collector has sampled it. Worst case, for a burst big enough to cross 50 reads inside one collector interval, with the burst starting just after a collector run:
+
+| Stage | Worst case | Source |
+|---|---|---|
+| Wait for the next collector run | 300s | `op-quota-collector.timer`, `OnCalendar=*:0/5` |
+| Timer slack | 30s | `AccuracySec=30s` |
+| node-exporter textfile scrape | 30s | `vm-node-exporter` `scrape_interval: 30s` |
+| Subquery step alignment | 60s | `[1h:1m]` steps sit on whole minutes |
+| Rule evaluation | 30s | `evaluation_interval: 30s`, `for: 0m` |
+| Alertmanager grouping | 30s | default route `group_wait: 30s` |
+| **Total to Discord** | **480s, about 8 minutes** | |
+
+Typical latency is about half of each variable stage plus the fixed 30s grouping, about 4 minutes (150 + 15 + 15 + 30 + 15 + 30 = 255s). A slower consumer that crosses 50 reads over the hour is only caught when the hourly sum crosses 50, which can take up to the full hour. At the 2026-09-12 burst rate (+160 reads in one 5 minute interval, about 32 reads/min) an 8 minute worst case is about 256 reads, a quarter of the daily cap, before anyone is paged.
+
+### Collector cadence
+
+The 5 minute collector interval is the dominant term above. Moving `op-quota-collector.timer` to every minute (`OnCalendar=*:*:00`, `AccuracySec=5s`) cuts the worst case to 60 + 5 + 30 + 60 + 30 + 30 = 215s, and shrinks the pre-reset blind spot from 5 minutes to 1. The cost is not quota, since the ratelimit call is free: it is 1440 instead of 288 short `op` runs a day on command-center1, with their journal lines shipped by vector. Prometheus sample volume does not change, because node-exporter is scraped every 30s whether or not the textfile changed. The timer is defined in ansible-quasarlab (`roles/op_quota_collector`), so the change belongs there, and it should be watched for `onepassword_ratelimit_collector_success` dropping in case 1Password throttles the control-plane endpoint at that rate.
 
 ### Triage
 

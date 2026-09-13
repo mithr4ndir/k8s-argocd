@@ -523,21 +523,50 @@ kube-prometheus-stack:
             # ~14/h over 48h of history, so 50/h has wide headroom.
             #
             # onepassword_ratelimit_used is a gauge that drops once a day when
-            # the window rolls (831 -> 45 at 02:52 UTC). increase()/rate()
-            # would read that drop as a counter reset and count the post-reset
-            # 45 as fresh burn, which false-fired at both resets in backtest.
-            # Instead: take the 1m step difference, clamp negatives (the reset)
-            # to 0, and sum the positive climbs over 1h. Steps where the
-            # collector was failing a minute earlier are dropped, so a bad run
-            # that zeroes the gauge cannot count its recovery as a spike.
+            # the window rolls (831 -> 45 at 02:51 UTC on 2026-09-12). increase()
+            # and rate() read any drop as a counter reset, so do not use them.
+            # Instead score each 1m step of the gauge:
+            #   - ordinary step: the climb, clamp_min'd so a stray decrease is 0.
+            #   - genuine rollover: the whole post-reset value, because the
+            #     account counter restarts from zero and everything it shows
+            #     was read since the reset. #200 clamped this step to 0 and
+            #     silently dropped those reads (#201).
+            # A rollover is told apart from an ordinary decrease by
+            # reset_seconds jumping up by more than an hour (it only ever
+            # counts down between rolls; 240 -> 82800 at both rolls in 48h).
+            # Steps where the collector was failing a minute earlier are
+            # dropped, so a bad run that zeroes the gauge cannot count its
+            # recovery as a spike. Reads after the last pre-reset sample but
+            # before the reset remain unobservable (at most one collector
+            # interval).
             - alert: OnePasswordQuotaBurnRateHigh
               expr: |
                 sum_over_time(
                   (
-                    clamp_min(
-                      onepassword_ratelimit_used{type="account",action="read_write"}
-                        - onepassword_ratelimit_used{type="account",action="read_write"} offset 1m,
-                      0
+                    (
+                      (
+                        clamp_min(
+                          onepassword_ratelimit_used{type="account",action="read_write"}
+                            - onepassword_ratelimit_used{type="account",action="read_write"} offset 1m,
+                          0
+                        )
+                        unless on (instance)
+                        (
+                          onepassword_ratelimit_reset_seconds{type="account",action="read_write"}
+                            - onepassword_ratelimit_reset_seconds{type="account",action="read_write"} offset 1m
+                          > 3600
+                        )
+                      )
+                      or on (instance)
+                      (
+                        clamp_min(onepassword_ratelimit_used{type="account",action="read_write"}, 0)
+                        and on (instance)
+                        (
+                          onepassword_ratelimit_reset_seconds{type="account",action="read_write"}
+                            - onepassword_ratelimit_reset_seconds{type="account",action="read_write"} offset 1m
+                          > 3600
+                        )
+                      )
                     )
                     and on (instance) (onepassword_ratelimit_collector_success offset 1m == 1)
                   )[1h:1m]
