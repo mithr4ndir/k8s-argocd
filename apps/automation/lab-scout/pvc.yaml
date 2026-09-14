@@ -1,0 +1,16 @@
+# seen.json: ideas already posted, so a digest never repeats one. A JSON file
+# written with rename, not SQLite, so NFS is fine here.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lab-scout-state
+  namespace: automation
+  labels:
+    app.kubernetes.io/name: lab-scout
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: k8s-nfs
+  resources:
+    requests:
+      storage: 64Mi

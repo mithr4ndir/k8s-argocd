@@ -1,0 +1,79 @@
+# Radagast: a weekly Discord digest of lab ideas, found by claude with web
+# search and checked against what the lab already runs.
+# Source: https://github.com/mithr4ndir/lab-scout
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: lab-scout
+  namespace: automation
+  labels:
+    app.kubernetes.io/name: lab-scout
+    app.kubernetes.io/component: digest
+spec:
+  schedule: "0 14 * * 6"
+  timeZone: Etc/UTC
+  # Replaces the file lock: seen.json must never have two writers.
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # Age out finished Jobs so KubeJobFailed does not keep firing on old history.
+      ttlSecondsAfterFinished: 604800
+      # No retry: a retry is another full model run, and a failure alerts anyway.
+      backoffLimit: 0
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: lab-scout
+            app.kubernetes.io/component: digest
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            fsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - name: lab-scout
+            image: ghcr.io/mithr4ndir/lab-scout:0.1.0@sha256:bba5f4ea8afd5ad52d7bfdfdc7515de5feb2369057a6d237b72f9f20c5456e74
+            imagePullPolicy: IfNotPresent
+            args:
+            - weekly
+            env:
+            - name: LAB_SCOUT_STATE_DIR
+              value: /data
+            envFrom:
+            - secretRef:
+                name: lab-scout-secrets
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                cpu: "1"
+                memory: 1Gi
+            volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: state
+              mountPath: /data
+          volumes:
+          - name: tmp
+            emptyDir:
+              sizeLimit: 512Mi
+          - name: state
+            persistentVolumeClaim:
+              claimName: lab-scout-state
