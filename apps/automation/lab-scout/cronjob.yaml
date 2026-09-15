@@ -42,7 +42,7 @@ spec:
               type: RuntimeDefault
           containers:
           - name: lab-scout
-            image: ghcr.io/mithr4ndir/lab-scout:0.1.0@sha256:bba5f4ea8afd5ad52d7bfdfdc7515de5feb2369057a6d237b72f9f20c5456e74
+            image: ghcr.io/mithr4ndir/lab-scout:0.1.1@sha256:38df5e14546b76148b3762cda6cadcb183cf39aad7028fb9d3e8125f24e52fb4
             imagePullPolicy: IfNotPresent
             args:
             - weekly
