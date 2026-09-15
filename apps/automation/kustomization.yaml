@@ -11,4 +11,5 @@ resources:
   # are validated in the Infrastructure vault.
   # - claude-bridge/
   - donchian-signal/
+  - lab-scout/
   - dream-team/

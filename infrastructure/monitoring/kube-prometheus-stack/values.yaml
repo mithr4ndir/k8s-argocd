@@ -944,6 +944,30 @@ kube-prometheus-stack:
                 summary: "Security enforcement hasn't run in over 1 hour on {{ $labels.instance }}"
                 description: "Last security timer run was {{ $value | humanizeDuration }} ago on {{ $labels.instance }}. Wazuh/CrowdSec config enforcement is not converging."
 
+    lab-scout-alerts:
+      groups:
+        - name: lab-scout
+          rules:
+            # Weekly CronJob (apps/automation/lab-scout). KubeJobFailed covers a
+            # run that fails; this covers runs that never happen or never finish
+            # (suspended, image pull errors, schedule missed) and a job that has
+            # never succeeded at all, where the last-success series is absent.
+            # Replayed 2026-09-14 against donchian-signal and dream-team: both
+            # branches return those jobs at a 1h threshold and nothing at 8d.
+            - alert: LabScoutDigestStale
+              expr: |
+                (time() - kube_cronjob_status_last_successful_time{namespace="automation",cronjob="lab-scout"} > 691200)
+                or
+                ((time() - kube_cronjob_created{namespace="automation",cronjob="lab-scout"} > 691200)
+                  unless on(namespace, cronjob)
+                  kube_cronjob_status_last_successful_time{namespace="automation",cronjob="lab-scout"})
+              for: 1h
+              labels:
+                severity: warning
+              annotations:
+                summary: "Radagast has not posted a lab ideas digest in over 8 days"
+                description: "CronJob automation/lab-scout has had no successful run for {{ $value | humanizeDuration }}. Check `kubectl -n automation get jobs -l app.kubernetes.io/name=lab-scout` and the last pod's logs."
+
     snmp-network-alerts:
       groups:
         - name: snmp-availability
