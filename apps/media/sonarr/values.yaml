@@ -1,7 +1,7 @@
 controllers:
   main:
     type: deployment
-    replicas: 1
+    replicas: 0
     pod:
       annotations:
         kubectl.kubernetes.io/restartedAt: "2026-01-18T05:30:00Z"
