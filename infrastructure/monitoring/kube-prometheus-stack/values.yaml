@@ -895,6 +895,22 @@ kube-prometheus-stack:
                 summary: "{{ $labels.name }} is not running on {{ $labels.instance }}"
                 description: "Systemd unit {{ $labels.name }} on {{ $labels.instance }} is not in active or failed state for 5 minutes."
 
+    # The two alerts about one specific run, AnsiblePlaybookFailed and
+    # AnsiblePlaybookMadeChanges, carry a link to that run's ARA report. The
+    # link comes from ansible_playbook_last_run_info, written by the run
+    # wrappers (ansible-quasarlab scripts/lib/ara-run-links.sh), and is looked
+    # up with `query` inside the annotation ON PURPOSE: joining it into the
+    # expression with group_left would put the run id in the alert's label set,
+    # so every hourly run would change the alert's identity and the same
+    # failing playbook would resolve and re-fire all day.
+    #
+    # When the series is absent (ARA down at write time, or the wrapper not
+    # deployed yet) the link line is simply omitted. There is no fallback to
+    # the ARA index: a link that does not go to the run you are reading about
+    # has to be checked before it can be trusted, which is worse than no link.
+    # AnsibleRepoSyncFailed has no link because it fires before any playbook
+    # runs, and the staleness alerts have none because a timer that never ran
+    # has no run to point at.
     ansible-automation:
       groups:
         - name: ansible-timer
@@ -905,8 +921,8 @@ kube-prometheus-stack:
               labels:
                 severity: warning
               annotations:
-                summary: "{{ $labels.playbook }} failed — hosts: {{ $labels.failed_hosts }}"
-                description: "Playbook {{ $labels.playbook }} failed on hosts: {{ $labels.failed_hosts }}. Check /var/log/ansible-quasarlab/ on {{ $labels.instance }}."
+                summary: "{{ $labels.playbook }} failed on hosts: {{ $labels.failed_hosts }}"
+                description: 'Playbook {{ $labels.playbook }} failed on hosts: {{ $labels.failed_hosts }}. Check /var/log/ansible-quasarlab/ on {{ $labels.instance }}.{{ with query (printf "ansible_playbook_last_run_info{job=\"vm-node-exporter\",playbook=%q}" $labels.playbook) }} [Open the failed run in ARA]({{ . | first | label "ara_url" }}){{ end }}'
             # The runners refuse to execute when they cannot pin their automation
             # checkout to origin/main, and write this metric on the way out. Without
             # it a refused run is only visible as AnsibleRunStale an hour later, and
@@ -934,7 +950,7 @@ kube-prometheus-stack:
                 severity: info
               annotations:
                 summary: "{{ $labels.playbook }} made changes"
-                description: "Playbook {{ $labels.playbook }} has had changed tasks for over 5 minutes. Check /var/log/ansible-quasarlab/ for details."
+                description: 'Playbook {{ $labels.playbook }} has had changed tasks for over 5 minutes. Check /var/log/ansible-quasarlab/ for details.{{ with query (printf "ansible_playbook_last_run_info{job=\"vm-node-exporter\",playbook=%q}" $labels.playbook) }} [See what changed in ARA]({{ . | first | label "ara_url" }}){{ end }}'
             - alert: AnsibleSecurityRunStale
               expr: time() - ansible_security_run_timestamp_seconds{job="vm-node-exporter"} > 3600
               for: 10m

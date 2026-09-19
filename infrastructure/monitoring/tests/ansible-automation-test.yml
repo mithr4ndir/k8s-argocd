@@ -1,0 +1,183 @@
+# promtool unit tests for the Ansible timer alerts, focused on the ARA link.
+#
+# The link is looked up in the annotation with `query` against
+# ansible_playbook_last_run_info instead of being joined into the expression,
+# so that the run id never becomes part of the alert's label set. These tests
+# assert the rendered annotation: the right run's URL when the info series is
+# there, and no link at all when it is not. There is no fallback link by
+# design, so the absent case asserts the exact text the alert had before ARA
+# links existed. A wrong metric name in the query would still produce a
+# plausible-looking alert, which is why the present case pins the full URL.
+rule_files:
+  - rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    name: a failed playbook links to the ARA report of the run that failed
+    input_series:
+      - series: 'ansible_playbook_success{job="vm-node-exporter", instance="command-center1:9100", playbook="vm_baseline.yml", failed_hosts="pve2"}'
+        values: '0x20'
+      - series: 'ansible_playbook_last_run_info{job="vm-node-exporter", instance="command-center1:9100", playbook="vm_baseline.yml", ara_url="http://192.168.1.88:8000/playbooks/13685.html"}'
+        values: '1x20'
+      # A different playbook's link must not leak into this alert.
+      - series: 'ansible_playbook_last_run_info{job="vm-node-exporter", instance="command-center1:9100", playbook="jellyfin.yml", ara_url="http://192.168.1.88:8000/playbooks/13687.html"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: AnsiblePlaybookFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: command-center1:9100
+              playbook: vm_baseline.yml
+              failed_hosts: pve2
+            exp_annotations:
+              summary: "vm_baseline.yml failed on hosts: pve2"
+              description: "Playbook vm_baseline.yml failed on hosts: pve2. Check /var/log/ansible-quasarlab/ on command-center1:9100. [Open the failed run in ARA](http://192.168.1.88:8000/playbooks/13685.html)"
+
+  - interval: 1m
+    name: a failed playbook with no ARA record gets no link at all
+    input_series:
+      - series: 'ansible_playbook_success{job="vm-node-exporter", instance="command-center1:9100", playbook="vm_baseline.yml", failed_hosts="pve2"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: AnsiblePlaybookFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: command-center1:9100
+              playbook: vm_baseline.yml
+              failed_hosts: pve2
+            exp_annotations:
+              summary: "vm_baseline.yml failed on hosts: pve2"
+              description: "Playbook vm_baseline.yml failed on hosts: pve2. Check /var/log/ansible-quasarlab/ on command-center1:9100."
+
+  - interval: 1m
+    name: each failing playbook gets its own run link
+    input_series:
+      - series: 'ansible_playbook_success{job="vm-node-exporter", instance="command-center1:9100", playbook="wazuh.yml", failed_hosts="wazuh"}'
+        values: '0x20'
+      - series: 'ansible_playbook_success{job="vm-node-exporter", instance="command-center1:9100", playbook="crowdsec.yml", failed_hosts="nginx1"}'
+        values: '0x20'
+      - series: 'ansible_playbook_last_run_info{job="vm-node-exporter", instance="command-center1:9100", playbook="wazuh.yml", ara_url="http://192.168.1.88:8000/playbooks/13693.html"}'
+        values: '1x20'
+      - series: 'ansible_playbook_last_run_info{job="vm-node-exporter", instance="command-center1:9100", playbook="crowdsec.yml", ara_url="http://192.168.1.88:8000/playbooks/13694.html"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: AnsiblePlaybookFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: command-center1:9100
+              playbook: crowdsec.yml
+              failed_hosts: nginx1
+            exp_annotations:
+              summary: "crowdsec.yml failed on hosts: nginx1"
+              description: "Playbook crowdsec.yml failed on hosts: nginx1. Check /var/log/ansible-quasarlab/ on command-center1:9100. [Open the failed run in ARA](http://192.168.1.88:8000/playbooks/13694.html)"
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: command-center1:9100
+              playbook: wazuh.yml
+              failed_hosts: wazuh
+            exp_annotations:
+              summary: "wazuh.yml failed on hosts: wazuh"
+              description: "Playbook wazuh.yml failed on hosts: wazuh. Check /var/log/ansible-quasarlab/ on command-center1:9100. [Open the failed run in ARA](http://192.168.1.88:8000/playbooks/13693.html)"
+
+  - interval: 1m
+    name: a changed playbook links to the run that changed something
+    input_series:
+      - series: 'ansible_playbook_changed_tasks{job="vm-node-exporter", instance="command-center1:9100", playbook="monitoring.yml", changed_hosts="pve,nginx1"}'
+        values: '3x20'
+      - series: 'ansible_playbook_last_run_info{job="vm-node-exporter", instance="command-center1:9100", playbook="monitoring.yml", ara_url="http://192.168.1.88:8000/playbooks/13686.html"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: AnsiblePlaybookMadeChanges
+        exp_alerts:
+          - exp_labels:
+              severity: info
+              playbook: monitoring.yml
+            exp_annotations:
+              summary: "monitoring.yml made changes"
+              description: "Playbook monitoring.yml has had changed tasks for over 5 minutes. Check /var/log/ansible-quasarlab/ for details. [See what changed in ARA](http://192.168.1.88:8000/playbooks/13686.html)"
+
+  - interval: 1m
+    name: a changed playbook with no ARA record gets no link at all
+    input_series:
+      - series: 'ansible_playbook_changed_tasks{job="vm-node-exporter", instance="command-center1:9100", playbook="monitoring.yml", changed_hosts="pve,nginx1"}'
+        values: '3x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: AnsiblePlaybookMadeChanges
+        exp_alerts:
+          - exp_labels:
+              severity: info
+              playbook: monitoring.yml
+            exp_annotations:
+              summary: "monitoring.yml made changes"
+              description: "Playbook monitoring.yml has had changed tasks for over 5 minutes. Check /var/log/ansible-quasarlab/ for details."
+
+  # AnsibleRepoSyncFailed fires before any playbook has run, so there is no run
+  # to link either. Asserted for the same reason as the staleness alerts.
+  - interval: 1m
+    name: a refused run carries no ARA link
+    input_series:
+      - series: 'ansible_run_repo_sync_success{job="vm-node-exporter", instance="command-center1:9100", repo="ansible-quasarlab"}'
+        values: '0x20'
+      # Present, and still must not be picked up: the run never happened.
+      - series: 'ansible_playbook_last_run_info{job="vm-node-exporter", instance="command-center1:9100", playbook="vm_baseline.yml", ara_url="http://192.168.1.88:8000/playbooks/13685.html"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: AnsibleRepoSyncFailed
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: vm-node-exporter
+              instance: command-center1:9100
+              repo: ansible-quasarlab
+            exp_annotations:
+              summary: "Ansible cannot pin ansible-quasarlab to its release branch"
+              description: "command-center1:9100 refused to run scheduled playbooks because ansible-quasarlab could not be synced to its pinned ref. No configuration is being enforced until this is fixed."
+
+  # The staleness alerts are about a timer that did not run, so there is no run
+  # to link and they deliberately carry no link. Asserted so a link does not
+  # creep into them later.
+  - interval: 1m
+    name: a stale timer carries no ARA link
+    input_series:
+      - series: 'ansible_run_timestamp_seconds{job="vm-node-exporter", instance="command-center1:9100", target_address="192.168.1.88"}'
+        values: '0x400'
+      - series: 'ansible_security_run_timestamp_seconds{job="vm-node-exporter", instance="command-center1:9100", target_address="192.168.1.88"}'
+        values: '0x400'
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: AnsibleRunStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: command-center1:9100
+              target_address: 192.168.1.88
+            exp_annotations:
+              summary: "Ansible timer hasn't run in over 1 hour on command-center1:9100"
+              description: "Last ansible run was 2h 0m 0s ago on command-center1:9100 (192.168.1.88). The systemd timer may be stopped or stuck."
+      - eval_time: 2h
+        alertname: AnsibleSecurityRunStale
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: vm-node-exporter
+              instance: command-center1:9100
+              target_address: 192.168.1.88
+            exp_annotations:
+              summary: "Security enforcement hasn't run in over 1 hour on command-center1:9100"
+              description: "Last security timer run was 2h 0m 0s ago on command-center1:9100. Wazuh/CrowdSec config enforcement is not converging."
