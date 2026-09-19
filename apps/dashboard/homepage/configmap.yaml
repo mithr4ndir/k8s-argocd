@@ -31,6 +31,10 @@ data:
         style: row
         columns: 3
         icon: mdi-cog
+      Automation:
+        style: row
+        columns: 3
+        icon: mdi-robot
       Temperatures:
         style: row
         columns: 3
@@ -38,6 +42,9 @@ data:
 
   bookmarks.yaml: |
     - Documentation:
+        - QuasarLab Docs:
+            - icon: mdi-book-open-page-variant
+              href: https://docs.herro.me
         - QuasarLab Runbooks:
             - icon: mdi-book-open-variant
               href: https://github.com/mithr4ndir/k8s-argocd/blob/main/docs/runbooks.md
@@ -87,6 +94,11 @@ data:
             href: https://192.168.1.1
             description: Firewall & DNS
             siteMonitor: https://192.168.1.1
+        - Lab Switch (lab-sw01):
+            icon: mdi-switch
+            href: https://192.168.1.2
+            description: TP-Link TL-SG2016P, 16-port managed, SNMP
+            siteMonitor: http://192.168.1.2
 
     - Media:
         - Jellyfin:
@@ -172,13 +184,23 @@ data:
               url: http://192.168.1.230:9090
         - Wazuh:
             icon: wazuh.png
-            href: https://192.168.1.171:5601
+            href: http://192.168.1.171:5601
             description: SIEM — 13 agents
             siteMonitor: http://192.168.1.171:5601
         - Alertmanager:
             icon: alertmanager.png
-            href: http://alertmanager-external.monitoring.svc:9093
+            href: http://192.168.1.233:9093
             description: Alert routing to Discord
+            siteMonitor: http://192.168.1.233:9093
+        - Uptime Kuma:
+            icon: uptime-kuma.png
+            href: https://192.168.1.129:3001/dashboard
+            description: Out-of-cluster monitor (vm117, not on NFS)
+        - Loki:
+            icon: loki.png
+            href: http://192.168.1.229/explore
+            description: Log aggregation, query via Grafana Explore
+            siteMonitor: http://192.168.1.231:3100/ready
 
     - Temperatures:
         - pve:
@@ -340,12 +362,40 @@ data:
               key: "{{HOMEPAGE_VAR_AUTHENTIK_TOKEN}}"
         - ArgoCD:
             icon: argocd.png
-            href: https://argocd.quasarlab.local
+            href: https://192.168.1.225
             description: GitOps deployments
-        - Command Center:
+            siteMonitor: https://192.168.1.225
+        - ARA (Ansible Runs):
             icon: mdi-console
-            href: http://192.168.1.88
-            description: Ansible control node
+            href: http://192.168.1.88:8000
+            description: Ansible run records (command-center1)
+            siteMonitor: http://192.168.1.88:8000
+        - Spec Workflow:
+            icon: mdi-clipboard-text
+            href: http://192.168.1.88:5000
+            description: Spec dashboard (command-center1)
+            siteMonitor: http://192.168.1.88:5000
+        - Review Viewer:
+            icon: mdi-magnify-scan
+            href: http://192.168.1.88:8765
+            description: ce:review run viewer (command-center1)
+            siteMonitor: http://192.168.1.88:8765
+        - GoatCounter:
+            icon: mdi-chart-box
+            href: https://gc.herro.me
+            description: Privacy-friendly analytics for docs.herro.me
+
+    - Automation:
+        - Dream Team:
+            icon: mdi-chart-timeline-variant
+            href: http://192.168.1.235
+            description: Dream Team indicators
+            siteMonitor: http://192.168.1.235
+        - Dask Dashboard:
+            icon: mdi-server-network
+            href: http://192.168.1.234:8787/status
+            description: LSDB Dask cluster scheduler
+            siteMonitor: http://192.168.1.234:8787/status
 
   widgets.yaml: |
     - logo:
