@@ -33,7 +33,14 @@ All share a LoadBalancer IP (`192.168.1.226`) via MetalLB and an NFS PV from Tru
 | Component | Version | Purpose |
 |-----------|---------|---------|
 | MetalLB | 0.15.2 | L2 LoadBalancer (IP pool: `192.168.1.225-240`) |
-| NFS Provisioner | 4.0.18 | Dynamic PVCs via TrueNAS (`192.168.1.15:/mnt/tank/k8s`) |
+| NFS Provisioner | 4.0.18 | Dynamic PVCs via TrueNAS (`192.168.1.15:/mnt/tank/k8s`), StorageClass `k8s-nfs`, currently `nfsvers=4.1` |
+
+> **Storage note (2026-09-19).** An NFSv4 callback deadlock on the NAS wedged
+> all NFS file I/O for about 11 hours, taking Prometheus and Loki down with it.
+> Because both are stored on these PVCs, nothing alerted. Moving `k8s-nfs` to
+> NFSv3 (stateless: no delegations, callbacks or sessions) is tracked in #213.
+> Full write-up: <https://docs.herro.me/incidents/2026-09-19-nfsv4-callback-deadlock/>
+
 | External Secrets Operator | Latest | Fetches secrets from 1Password |
 | Stakater Reloader | 1.4.14 | Auto-restarts pods on ConfigMap/Secret changes |
 
