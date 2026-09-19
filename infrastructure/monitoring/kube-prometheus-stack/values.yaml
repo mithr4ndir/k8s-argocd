@@ -968,6 +968,84 @@ kube-prometheus-stack:
                 summary: "Radagast has not posted a lab ideas digest in over 8 days"
                 description: "CronJob automation/lab-scout has had no successful run for {{ $value | humanizeDuration }}. Check `kubectl -n automation get jobs -l app.kubernetes.io/name=lab-scout` and the last pod's logs."
 
+    agent-cmd-audit-alerts:
+      groups:
+        # Feed that posts every Bash command an AI agent runs on
+        # command-center1 to Discord (ansible-quasarlab
+        # roles/cmd_center/tasks/cmd_audit.yml). Metrics come from the
+        # node_exporter textfile collector, so they only exist once
+        # cmd_center_cmd_audit_enabled is true; every rule here is
+        # absent-safe and stays quiet until then.
+        - name: agent-cmd-audit
+          rules:
+            # THE rule that matters. Everything below proves a component ran;
+            # this proves data arrived. An hourly canary goes through the same
+            # entry point the hook uses, and the timestamp is stamped only
+            # after Discord returns 2xx on a ?wait=true post, so it covers the
+            # hook wiring, spool, rotation, redaction, secret resolution,
+            # network and Discord acceptance in one series. Wazuh was green on
+            # every liveness check for four months while collecting nothing;
+            # this is the lesson from that.
+            - alert: AgentCmdAuditCanaryStale
+              expr: time() - agent_cmd_audit_canary_posted_timestamp_seconds{job="vm-node-exporter"} > 10800
+              for: 15m
+              labels:
+                severity: warning
+              annotations:
+                summary: "The agent command audit feed has not posted a canary in over 3 hours"
+                description: "The hourly canary on {{ $labels.instance }} last reached Discord {{ $value | humanizeDuration }} ago, so commands run by agents are not being recorded either. Check `systemctl status agent-cmd-audit.timer agent-cmd-audit-canary.timer` and `journalctl -t agent-cmd-audit -n 50` on the host."
+
+            # A hung Type=oneshot pins itself in activating, and systemd will
+            # not re-trigger a timer whose service is still activating, so one
+            # wedged run ends every later run. Same failure that stopped apt
+            # patching for 11 days. The unit is in node_exporter_systemd_units
+            # for command-center1; without that entry this rule is vacuous.
+            - alert: AgentCmdAuditStuck
+              expr: node_systemd_unit_state{job="vm-node-exporter", name="agent-cmd-audit.service", state="activating"} == 1
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "agent-cmd-audit.service is stuck activating on {{ $labels.instance }}"
+                description: "The flush oneshot has been activating for over 10 minutes, far outside a normal sub-second run. While it stays there its timer cannot re-fire. Fix: `systemctl stop agent-cmd-audit.service` on the host, then confirm `systemctl list-timers agent-cmd-audit` shows a real NEXT again."
+
+            # Discord unreachable, a bad webhook, or the 1Password kill switch
+            # tripped. Nothing is lost while this fires: sealed batches are
+            # kept and retried, and the oldest are only evicted at the cap.
+            - alert: AgentCmdAuditBacklog
+              expr: agent_cmd_audit_inbox_files{job="vm-node-exporter"} > 50
+              for: 15m
+              labels:
+                severity: warning
+              annotations:
+                summary: "The agent command audit feed has {{ $value }} batches it cannot post"
+                description: "Batches are spooling on {{ $labels.instance }} and not draining, so posts are failing. Check agent_cmd_audit_post_failures_total and agent_cmd_audit_no_webhook_total, and `journalctl -t agent-cmd-audit -n 50`."
+
+            # Records that never reach Discord at all. Distinct from a withheld
+            # command, which is a redaction working as designed and still
+            # posts a line. reason= says which cap or lock was hit.
+            - alert: AgentCmdAuditDropping
+              expr: increase(agent_cmd_audit_dropped_total{job="vm-node-exporter"}[1h]) > 0
+              for: 5m
+              labels:
+                severity: warning
+              annotations:
+                summary: "The agent command audit feed dropped records ({{ $labels.reason }})"
+                description: "{{ $value | printf \"%.0f\" }} record(s) were dropped on {{ $labels.instance }} in the last hour with reason={{ $labels.reason }}. backlog or spool_full means the flusher is not keeping up; lock means contention in the recorder."
+
+            # An audit control that is switched off must not quietly stay off.
+            # Recording can be disabled with no deploy (touch the OFF file), so
+            # without this a forgotten kill switch would look identical to a
+            # quiet lab.
+            - alert: AgentCmdAuditDisabled
+              expr: agent_cmd_audit_enabled{job="vm-node-exporter"} == 0
+              for: 24h
+              labels:
+                severity: info
+              annotations:
+                summary: "The agent command audit feed has been disabled for 24 hours"
+                description: "Command recording has been off on {{ $labels.instance }} for a day. Re-enable it by removing ~/.local/state/agent-cmd-audit/OFF, or set cmd_center_cmd_audit_recording_enabled back to true if it was turned off in Ansible."
+
     snmp-network-alerts:
       groups:
         - name: snmp-availability
