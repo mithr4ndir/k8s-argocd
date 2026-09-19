@@ -1,0 +1,140 @@
+# promtool unit tests for the agent command audit alerts.
+# Each case asserts the rule FIRES on the failure it is meant to catch. A rule
+# that returns nothing because of a typo would pass a "nothing fires today"
+# check, so every alert here has a positive case.
+rule_files:
+  - rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  # The canary is the rule that actually proves data is arriving.
+  - interval: 1m
+    name: canary goes stale when Discord stops accepting posts
+    input_series:
+      # Stamped once at t=0 and never again.
+      - series: 'agent_cmd_audit_canary_posted_timestamp_seconds{job="vm-node-exporter", instance="command-center1:9100"}'
+        values: '0+0x400'
+    alert_rule_test:
+      # 3h threshold plus the 15m for:, so nothing at 3h.
+      - eval_time: 3h
+        alertname: AgentCmdAuditCanaryStale
+        exp_alerts: []
+      - eval_time: 3h20m
+        alertname: AgentCmdAuditCanaryStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: command-center1:9100
+            exp_annotations:
+              summary: "The agent command audit feed has not posted a canary in over 3 hours"
+              description: "The hourly canary on command-center1:9100 last reached Discord 3h 20m 0s ago, so commands run by agents are not being recorded either. Check `systemctl status agent-cmd-audit.timer agent-cmd-audit-canary.timer` and `journalctl -t agent-cmd-audit -n 50` on the host."
+
+  - interval: 1m
+    name: a healthy canary never alerts
+    input_series:
+      # Advancing in step with time(), i.e. posting every interval.
+      - series: 'agent_cmd_audit_canary_posted_timestamp_seconds{job="vm-node-exporter", instance="command-center1:9100"}'
+        values: '0+60x400'
+    alert_rule_test:
+      - eval_time: 6h
+        alertname: AgentCmdAuditCanaryStale
+        exp_alerts: []
+
+  - interval: 1m
+    name: a wedged oneshot is caught before its timer dies quietly
+    input_series:
+      - series: 'node_systemd_unit_state{job="vm-node-exporter", instance="command-center1:9100", name="agent-cmd-audit.service", state="activating"}'
+        values: '1x60'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: AgentCmdAuditStuck
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: AgentCmdAuditStuck
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: command-center1:9100
+              name: agent-cmd-audit.service
+              state: activating
+            exp_annotations:
+              summary: "agent-cmd-audit.service is stuck activating on command-center1:9100"
+              description: "The flush oneshot has been activating for over 10 minutes, far outside a normal sub-second run. While it stays there its timer cannot re-fire. Fix: `systemctl stop agent-cmd-audit.service` on the host, then confirm `systemctl list-timers agent-cmd-audit` shows a real NEXT again."
+
+  - interval: 1m
+    name: batches piling up because Discord is unreachable
+    input_series:
+      - series: 'agent_cmd_audit_inbox_files{job="vm-node-exporter", instance="command-center1:9100"}'
+        values: '0+2x120'
+    alert_rule_test:
+      # Crosses 50 at t=26m, so the 15m for: clears at about 41m.
+      - eval_time: 30m
+        alertname: AgentCmdAuditBacklog
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: AgentCmdAuditBacklog
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: command-center1:9100
+            exp_annotations:
+              summary: "The agent command audit feed has 90 batches it cannot post"
+              description: "Batches are spooling on command-center1:9100 and not draining, so posts are failing. Check agent_cmd_audit_post_failures_total and agent_cmd_audit_no_webhook_total, and `journalctl -t agent-cmd-audit -n 50`."
+
+  - interval: 1m
+    name: silent data loss is surfaced with its reason
+    input_series:
+      - series: 'agent_cmd_audit_dropped_total{job="vm-node-exporter", instance="command-center1:9100", reason="backlog"}'
+        values: '0+0x30 3+0x90'
+      # A reason that never increments must not alert.
+      - series: 'agent_cmd_audit_dropped_total{job="vm-node-exporter", instance="command-center1:9100", reason="lock"}'
+        values: '0+0x120'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: AgentCmdAuditDropping
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: AgentCmdAuditDropping
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: command-center1:9100
+              reason: backlog
+            exp_annotations:
+              summary: "The agent command audit feed dropped records (backlog)"
+              description: "3 record(s) were dropped on command-center1:9100 in the last hour with reason=backlog. backlog or spool_full means the flusher is not keeping up; lock means contention in the recorder."
+
+  - interval: 1m
+    name: a kill switch left on does not stay on unnoticed
+    input_series:
+      - series: 'agent_cmd_audit_enabled{job="vm-node-exporter", instance="command-center1:9100"}'
+        values: '0x1600'
+    alert_rule_test:
+      - eval_time: 12h
+        alertname: AgentCmdAuditDisabled
+        exp_alerts: []
+      - eval_time: 25h
+        alertname: AgentCmdAuditDisabled
+        exp_alerts:
+          - exp_labels:
+              severity: info
+              job: vm-node-exporter
+              instance: command-center1:9100
+            exp_annotations:
+              summary: "The agent command audit feed has been disabled for 24 hours"
+              description: "Command recording has been off on command-center1:9100 for a day. Re-enable it by removing ~/.local/state/agent-cmd-audit/OFF, or set cmd_center_cmd_audit_recording_enabled back to true if it was turned off in Ansible."
+
+  - interval: 1m
+    name: an enabled feed never fires the disabled alert
+    input_series:
+      - series: 'agent_cmd_audit_enabled{job="vm-node-exporter", instance="command-center1:9100"}'
+        values: '1x1600'
+    alert_rule_test:
+      - eval_time: 25h
+        alertname: AgentCmdAuditDisabled
+        exp_alerts: []
