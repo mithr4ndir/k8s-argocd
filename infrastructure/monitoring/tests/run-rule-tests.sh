@@ -7,7 +7,8 @@
 #
 # A test file is named <rules-map key>-test.yml and refers to its rules as
 # rules.yml; this script extracts that key out of values.yaml into a temporary
-# rules.yml so promtool sees a plain rule group file.
+# rules.yml so promtool sees a plain rule group file. The key may also be given
+# without the "-alerts" suffix most of those map keys carry.
 #
 # Why these exist: an alert expression that returns nothing today looks exactly
 # like a correct one. Every test here asserts the rule FIRES on the failure it
@@ -45,11 +46,13 @@ for key in "${keys[@]}"; do
     test_file="${HERE}/${key}-test.yml"
     [[ -r "$test_file" ]] || { echo "no test file for ${key}" >&2; status=1; continue; }
 
-    python3 - "$VALUES" "${key}-alerts" "${workdir}/rules.yml" <<'PY'
+    python3 - "$VALUES" "${key}" "${workdir}/rules.yml" <<'PY'
 import sys, yaml
 values, key, out = sys.argv[1], sys.argv[2], sys.argv[3]
 tree = yaml.safe_load(open(values))["kube-prometheus-stack"]
-rules = tree["additionalPrometheusRulesMap"][key]
+groups = tree["additionalPrometheusRulesMap"]
+# Most map keys are named <key>-alerts, a few (ansible-automation) are not.
+rules = groups.get(key) or groups[f"{key}-alerts"]
 with open(out, "w") as handle:
     yaml.safe_dump(rules, handle, sort_keys=False, width=10000)
 PY
