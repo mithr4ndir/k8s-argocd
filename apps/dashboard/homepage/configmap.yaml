@@ -93,10 +93,9 @@ data:
             icon: pfsense.png
             href: https://192.168.1.1
             description: Firewall & DNS
-            siteMonitor: https://192.168.1.1
         - Lab Switch (lab-sw01):
             icon: mdi-switch
-            href: https://192.168.1.2
+            href: http://192.168.1.2
             description: TP-Link TL-SG2016P, 16-port managed, SNMP
             siteMonitor: http://192.168.1.2
 
@@ -364,7 +363,6 @@ data:
             icon: argocd.png
             href: https://192.168.1.225
             description: GitOps deployments
-            siteMonitor: https://192.168.1.225
         - ARA (Ansible Runs):
             icon: mdi-console
             href: http://192.168.1.88:8000
