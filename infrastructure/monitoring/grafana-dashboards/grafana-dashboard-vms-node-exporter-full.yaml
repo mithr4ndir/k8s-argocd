@@ -108,7 +108,7 @@ data:
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "${datasource}" },
-              "expr": "(1 - (node_memory_AvailableBytes{instance=~\"$instance\"} / node_memory_MemTotal_bytes{instance=~\"$instance\"})) * 100",
+              "expr": "(1 - (node_memory_MemAvailable_bytes{instance=~\"$instance\"} / node_memory_MemTotal_bytes{instance=~\"$instance\"})) * 100",
               "refId": "A"
             }
           ],
@@ -275,11 +275,10 @@ data:
                 "scaleDistribution": { "type": "linear" },
                 "showPoints": "never",
                 "spanNulls": false,
-                "stacking": { "group": "A", "mode": "percent" },
+                "stacking": { "group": "A", "mode": "normal" },
                 "thresholdsStyle": { "mode": "off" }
               },
               "mappings": [],
-              "max": 100,
               "min": 0,
               "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
               "unit": "percent"
@@ -295,7 +294,7 @@ data:
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "${datasource}" },
-              "expr": "avg by(mode) (rate(node_cpu_seconds_total{instance=~\"$instance\"}[5m])) * 100",
+              "expr": "avg by(instance, mode) (rate(node_cpu_seconds_total{instance=~\"$instance\", mode!=\"idle\"}[5m])) * 100",
               "legendFormat": "{{mode}}",
               "refId": "A"
             }
@@ -409,7 +408,7 @@ data:
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "${datasource}" },
-              "expr": "node_memory_MemTotal_bytes{instance=~\"$instance\"} - node_memory_MemAvailable_bytes{instance=~\"$instance\"}",
+              "expr": "node_memory_MemTotal_bytes{instance=~\"$instance\"} - node_memory_MemFree_bytes{instance=~\"$instance\"} - node_memory_Buffers_bytes{instance=~\"$instance\"} - node_memory_Cached_bytes{instance=~\"$instance\"} - node_memory_SReclaimable_bytes{instance=~\"$instance\"}",
               "legendFormat": "Used",
               "refId": "A"
             },
@@ -421,8 +420,8 @@ data:
             },
             {
               "datasource": { "type": "prometheus", "uid": "${datasource}" },
-              "expr": "node_memory_Cached_bytes{instance=~\"$instance\"}",
-              "legendFormat": "Cached",
+              "expr": "node_memory_Cached_bytes{instance=~\"$instance\"} + node_memory_SReclaimable_bytes{instance=~\"$instance\"}",
+              "legendFormat": "Cached + reclaimable slab",
               "refId": "C"
             },
             {
@@ -748,6 +747,6 @@ data:
       "timezone": "browser",
       "title": "Node Exporter Full",
       "uid": "node-exporter-full",
-      "version": 1,
+      "version": 2,
       "weekStart": ""
     }
