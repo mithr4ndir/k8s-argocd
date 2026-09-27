@@ -1,0 +1,178 @@
+# promtool unit tests for the TrueNAS pool and SMART alerts.
+#
+# These metrics had no alerts at all before this group, so the point of every
+# test here is that the rule FIRES on the specific failure it is meant to
+# catch. A rule that returns nothing today looks identical to a correct one,
+# and this lab has been bitten by exactly that (node_exporter systemd
+# allowlists made three real outages unalertable).
+#
+# Label sets mirror what the exporter actually produces, taken from a live
+# query on 2026-09-27: all eight disks reported health 1 with zero CRC and zero
+# reallocated sectors, and both pools were ONLINE.
+rule_files:
+  - rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  # --- the failure this lab actually has -------------------------------------
+  - interval: 1m
+    name: a degraded tank pool pages, and boot-pool staying ONLINE does not
+    input_series:
+      - series: 'zfs_pool_health{job="vm-node-exporter", instance="truenas", pool="tank"}'
+        values: '0+0x5 1+0x20'
+      - series: 'zfs_pool_health{job="vm-node-exporter", instance="truenas", pool="boot-pool"}'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ZfsPoolNotOnline
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: ZfsPoolNotOnline
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: vm-node-exporter
+              instance: truenas
+              pool: tank
+            exp_annotations:
+              summary: "ZFS pool tank is not ONLINE"
+              description: "Pool tank on truenas reports health code 1 (0=ONLINE 1=DEGRADED 2=FAULTED 3=OFFLINE 4=UNAVAIL 5=REMOVED 6=UNKNOWN). Check `zpool status -v tank`. Do NOT make pool topology changes mid-incident."
+
+  # --- the case the exporter bug made unreachable ----------------------------
+  - interval: 1m
+    name: a disk failing its SMART health check pages
+    input_series:
+      - series: 'smart_device_health{job="vm-node-exporter", instance="truenas", device="sdb", model="Inland SATA SSD", serial="IB24AK0004S00004"}'
+        values: '0x30'
+      - series: 'smart_device_health{job="vm-node-exporter", instance="truenas", device="sdf", model="WD Blue SA510 2.5 4TB", serial="24230KD00005"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: SmartDeviceHealthFailed
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: vm-node-exporter
+              instance: truenas
+              device: sdb
+              model: Inland SATA SSD
+              serial: IB24AK0004S00004
+            exp_annotations:
+              summary: "SMART health FAILED on sdb (Inland SATA SSD)"
+              description: "sdb serial IB24AK0004S00004 on truenas failed its SMART overall-health check. Capture `smartctl -a /dev/sdb` before replacing it, the output is the RMA evidence."
+
+  - interval: 1m
+    name: a present but unreadable device warns, and healthy ones do not
+    input_series:
+      - series: 'smart_collect_ok{job="vm-node-exporter", instance="truenas", device="sdc"}'
+        values: '0x30'
+      - series: 'smart_collect_ok{job="vm-node-exporter", instance="truenas", device="sdd"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: SmartCollectFailed
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: SmartCollectFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: truenas
+              device: sdc
+            exp_annotations:
+              summary: "Cannot read SMART data from sdc"
+              description: "smartctl returned no usable output for sdc on truenas for 15 minutes. The device is present but unreadable, which is how a drive dropping off the SATA bus begins."
+
+  # --- drive falls off the bus: the series simply stops existing -------------
+  - interval: 1m
+    name: a disk that stops reporting is noticed even though nothing turns 0
+    input_series:
+      # sdb reports for 70 minutes and then goes absent, which is what a SATA
+      # dropout looks like: no value ever becomes 0, the series just ends.
+      - series: 'smart_device_health{job="vm-node-exporter", instance="truenas", device="sdb", model="Inland SATA SSD", serial="IB24AK0004S00004"}'
+        values: '1+0x70 _x60'
+      - series: 'smart_device_health{job="vm-node-exporter", instance="truenas", device="sdf", model="WD Blue SA510 2.5 4TB", serial="24230KD00005"}'
+        values: '1x130'
+    alert_rule_test:
+      # Still two disks, and an hour ago there were two.
+      - eval_time: 65m
+        alertname: SmartDeviceDisappeared
+        exp_alerts: []
+      # Now one disk, an hour ago two.
+      - eval_time: 90m
+        alertname: SmartDeviceDisappeared
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: truenas
+            exp_annotations:
+              summary: "A disk stopped reporting SMART data on truenas"
+              description: "truenas is reporting SMART for fewer disks than it was an hour ago, which is what a drive falling off the bus looks like. Compare `lsblk` against the expected bay map and check `dmesg` for ata link errors. Bay mapping: LED diskN = ataN = Nth tray left to right, NOT sd letters."
+
+  # --- early warning for a flaky link ---------------------------------------
+  - interval: 1m
+    name: growing SATA CRC errors warn, a flat counter does not
+    input_series:
+      - series: 'smart_crc_error_count{job="vm-node-exporter", instance="truenas", device="sdb", model="Inland SATA SSD", serial="IB24AK0004S00004"}'
+        values: '0+1x60'
+      - series: 'smart_crc_error_count{job="vm-node-exporter", instance="truenas", device="sdf", model="WD Blue SA510 2.5 4TB", serial="24230KD00005"}'
+        values: '0x60'
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: SmartCrcErrorsIncreasing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: truenas
+              device: sdb
+              model: Inland SATA SSD
+              serial: IB24AK0004S00004
+            exp_annotations:
+              summary: "SATA CRC errors increasing on sdb"
+              description: "sdb (Inland SATA SSD, serial IB24AK0004S00004) on truenas gained 40 UDMA CRC errors in 6h. This usually means the link or cable, not the flash."
+
+  - interval: 1m
+    name: growing reallocated sectors warn
+    input_series:
+      - series: 'smart_reallocated_sector_count{job="vm-node-exporter", instance="truenas", device="sdc", model="Inland SATA SSD", serial="IB24AK0004S00013"}'
+        values: '0+1x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: SmartReallocatedSectorsIncreasing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: truenas
+              device: sdc
+              model: Inland SATA SSD
+              serial: IB24AK0004S00013
+            exp_annotations:
+              summary: "Reallocated sectors increasing on sdc"
+              description: "sdc (Inland SATA SSD, serial IB24AK0004S00013) on truenas gained 45 reallocated sectors in 24h. Media is being retired; plan replacement."
+
+  # --- the rule that stops every rule above from going vacuous --------------
+  - interval: 1m
+    name: a dead exporter warns, because otherwise every alert here goes blind
+    input_series:
+      # Timestamp frozen at t=0 while wall clock advances, so the gap grows.
+      - series: 'zfs_smart_textfile_last_run_timestamp_seconds{job="vm-node-exporter", instance="truenas"}'
+        values: '0x60'
+    alert_rule_test:
+      # 1800s is 30m, plus for: 10m, so nothing before 40m.
+      - eval_time: 25m
+        alertname: ZfsSmartExporterStale
+        exp_alerts: []
+      - eval_time: 59m
+        alertname: ZfsSmartExporterStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: truenas
+            exp_annotations:
+              summary: "ZFS/SMART exporter on truenas is stale"
+              description: "The zfs-smart-textfile timer on truenas last wrote 59m 0s ago. Until it runs again every pool and SMART alert in this group is blind. Check `systemctl status zfs-smart-textfile.timer` and that it survived a boot-environment update."

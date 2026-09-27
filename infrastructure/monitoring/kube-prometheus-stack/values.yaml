@@ -1111,6 +1111,94 @@ kube-prometheus-stack:
                 summary: "Packet discards on {{ $labels.instance }} interface {{ $labels.ifName }}"
                 description: "Interface {{ $labels.ifName }} (alias '{{ $labels.ifAlias }}') is discarding >10 packets/sec for 10m. Either congestion or buffer exhaustion."
 
+    truenas-storage-alerts:
+      groups:
+        # The tank pool and its SMART metrics come from the zfs-smart-textfile
+        # exporter (ansible-quasarlab roles/truenas). Before this group existed
+        # the exporter had metrics and NO alerts at all, so a degraded pool or a
+        # failing disk was visible on a dashboard and paged nobody.
+        - name: truenas-storage
+          rules:
+            # The durable signal for the failure this lab actually has: three
+            # Inland IB24AK SSDs in tank repeatedly drop off the SATA bus. When
+            # a vdev member vanishes ZFS degrades the pool and stays degraded,
+            # so unlike a disappearing per-disk series this cannot silently
+            # resolve itself.
+            - alert: ZfsPoolNotOnline
+              expr: zfs_pool_health{job="vm-node-exporter"} != 0
+              for: 5m
+              labels:
+                severity: critical
+              annotations:
+                summary: "ZFS pool {{ $labels.pool }} is not ONLINE"
+                description: "Pool {{ $labels.pool }} on {{ $labels.instance }} reports health code {{ $value }} (0=ONLINE 1=DEGRADED 2=FAULTED 3=OFFLINE 4=UNAVAIL 5=REMOVED 6=UNKNOWN). Check `zpool status -v {{ $labels.pool }}`. Do NOT make pool topology changes mid-incident."
+            - alert: SmartDeviceHealthFailed
+              expr: smart_device_health{job="vm-node-exporter"} == 0
+              for: 5m
+              labels:
+                severity: critical
+              annotations:
+                summary: "SMART health FAILED on {{ $labels.device }} ({{ $labels.model }})"
+                description: "{{ $labels.device }} serial {{ $labels.serial }} on {{ $labels.instance }} failed its SMART overall-health check. Capture `smartctl -a /dev/{{ $labels.device }}` before replacing it, the output is the RMA evidence."
+            - alert: SmartCollectFailed
+              # Distinct from a FAILED health check: the device is present but
+              # smartctl could not be read at all (exit bits 0-1). Without this
+              # the disk would simply stop being reported, which on a dashboard
+              # is indistinguishable from healthy.
+              expr: smart_collect_ok{job="vm-node-exporter"} == 0
+              for: 15m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Cannot read SMART data from {{ $labels.device }}"
+                description: "smartctl returned no usable output for {{ $labels.device }} on {{ $labels.instance }} for 15 minutes. The device is present but unreadable, which is how a drive dropping off the SATA bus begins."
+            - alert: SmartDeviceDisappeared
+              # Best effort, and deliberately not the primary signal. Once the
+              # device has been gone longer than the offset window the left
+              # side expires too and this resolves on its own, which is exactly
+              # why ZfsPoolNotOnline above carries the critical severity.
+              expr: |
+                count by (instance) (smart_device_health{job="vm-node-exporter"})
+                  <
+                count by (instance) (smart_device_health{job="vm-node-exporter"} offset 1h)
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "A disk stopped reporting SMART data on {{ $labels.instance }}"
+                description: "{{ $labels.instance }} is reporting SMART for fewer disks than it was an hour ago, which is what a drive falling off the bus looks like. Compare `lsblk` against the expected bay map and check `dmesg` for ata link errors. Bay mapping: LED diskN = ataN = Nth tray left to right, NOT sd letters."
+            - alert: SmartCrcErrorsIncreasing
+              # UDMA CRC errors are the classic signature of a flaky SATA link
+              # or cable rather than dying flash, so this is the closest early
+              # warning for the bus dropouts. All eight disks read 0 as of
+              # 2026-09-27, so any increase is genuinely new.
+              expr: increase(smart_crc_error_count{job="vm-node-exporter"}[6h]) > 0
+              for: 15m
+              labels:
+                severity: warning
+              annotations:
+                summary: "SATA CRC errors increasing on {{ $labels.device }}"
+                description: "{{ $labels.device }} ({{ $labels.model }}, serial {{ $labels.serial }}) on {{ $labels.instance }} gained {{ $value | printf \"%.0f\" }} UDMA CRC errors in 6h. This usually means the link or cable, not the flash."
+            - alert: SmartReallocatedSectorsIncreasing
+              expr: increase(smart_reallocated_sector_count{job="vm-node-exporter"}[24h]) > 0
+              for: 30m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Reallocated sectors increasing on {{ $labels.device }}"
+                description: "{{ $labels.device }} ({{ $labels.model }}, serial {{ $labels.serial }}) on {{ $labels.instance }} gained {{ $value | printf \"%.0f\" }} reallocated sectors in 24h. Media is being retired; plan replacement."
+            - alert: ZfsSmartExporterStale
+              # Every rule above reads a textfile that one timer writes. If that
+              # timer dies the series go stale and then absent, and all of the
+              # above quietly stop being able to fire. This is the rule that
+              # keeps the rest from being vacuous.
+              expr: time() - zfs_smart_textfile_last_run_timestamp_seconds{job="vm-node-exporter"} > 1800
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "ZFS/SMART exporter on {{ $labels.instance }} is stale"
+                description: "The zfs-smart-textfile timer on {{ $labels.instance }} last wrote {{ $value | humanizeDuration }} ago. Until it runs again every pool and SMART alert in this group is blind. Check `systemctl status zfs-smart-textfile.timer` and that it survived a boot-environment update."
     media-service-health:
       groups:
         - name: media-services
