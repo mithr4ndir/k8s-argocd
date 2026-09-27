@@ -176,3 +176,66 @@ tests:
             exp_annotations:
               summary: "ZFS/SMART exporter on truenas is stale"
               description: "The zfs-smart-textfile timer on truenas last wrote 59m 0s ago. Until it runs again every pool and SMART alert in this group is blind. Check `systemctl status zfs-smart-textfile.timer` and that it survived a boot-environment update."
+
+  # --- the group going blind rather than quiet (Codex, #225) ----------------
+  - interval: 1m
+    name: every SMART series vanishing pages, even while the timestamp keeps updating
+    input_series:
+      # Device enumeration fails: no smart_* series at all, but the exporter is
+      # alive and still writing its timestamp, so ZfsSmartExporterStale is
+      # silent and the count comparison has no left-hand side to evaluate.
+      - series: 'zfs_smart_textfile_last_run_timestamp_seconds{job="vm-node-exporter", instance="truenas"}'
+        values: '0+60x40'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: SmartMetricsAbsent
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: SmartMetricsAbsent
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: vm-node-exporter
+              instance: truenas
+            exp_annotations:
+              summary: "No pool or SMART metrics at all from truenas"
+              description: "truenas is exporting no SMART disk series or no exporter timestamp, so every pool and drive-health alert in this group is blind rather than merely quiet. node_exporter being up proves nothing here. Check that /var/lib/node_exporter/textfiles/zfs_smart.prom exists and that zfs-smart-textfile.timer survived the last boot-environment update."
+      # The partial-loss rule genuinely cannot fire here, which is why the
+      # absence rule above exists and carries critical.
+      - eval_time: 20m
+        alertname: SmartDeviceDisappeared
+        exp_alerts: []
+
+  - interval: 1m
+    name: a missing exporter timestamp pages even though disks still report
+    input_series:
+      - series: 'smart_device_health{job="vm-node-exporter", instance="truenas", device="sda", model="Inland SATA SSD", serial="IB24AJ0004S00183"}'
+        values: '1x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: SmartMetricsAbsent
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: vm-node-exporter
+              instance: truenas
+            exp_annotations:
+              summary: "No pool or SMART metrics at all from truenas"
+              description: "truenas is exporting no SMART disk series or no exporter timestamp, so every pool and drive-health alert in this group is blind rather than merely quiet. node_exporter being up proves nothing here. Check that /var/lib/node_exporter/textfiles/zfs_smart.prom exists and that zfs-smart-textfile.timer survived the last boot-environment update."
+      # The stale rule cannot fire on an absent series: the subtraction yields
+      # nothing. That is the hole this pair of tests pins.
+      - eval_time: 20m
+        alertname: ZfsSmartExporterStale
+        exp_alerts: []
+
+  - interval: 1m
+    name: a fully healthy exporter does not trigger the absence rule
+    input_series:
+      - series: 'smart_device_health{job="vm-node-exporter", instance="truenas", device="sda", model="Inland SATA SSD", serial="IB24AJ0004S00183"}'
+        values: '1x40'
+      - series: 'zfs_smart_textfile_last_run_timestamp_seconds{job="vm-node-exporter", instance="truenas"}'
+        values: '0+60x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: SmartMetricsAbsent
+        exp_alerts: []

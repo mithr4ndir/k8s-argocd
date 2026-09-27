@@ -1157,6 +1157,11 @@ kube-prometheus-stack:
               # device has been gone longer than the offset window the left
               # side expires too and this resolves on its own, which is exactly
               # why ZfsPoolNotOnline above carries the critical severity.
+              #
+              # This only catches a PARTIAL loss. If every disk stops reporting
+              # at once the left-hand count emits no sample rather than a zero
+              # and this cannot fire at all; SmartMetricsAbsent below covers
+              # that, which is the more severe case of the same condition.
               expr: |
                 count by (instance) (smart_device_health{job="vm-node-exporter"})
                   <
@@ -1187,6 +1192,33 @@ kube-prometheus-stack:
               annotations:
                 summary: "Reallocated sectors increasing on {{ $labels.device }}"
                 description: "{{ $labels.device }} ({{ $labels.model }}, serial {{ $labels.serial }}) on {{ $labels.instance }} gained {{ $value | printf \"%.0f\" }} reallocated sectors in 24h. Media is being retired; plan replacement."
+            - alert: SmartMetricsAbsent
+              # Every rule in this group reads one textfile. If it is deleted,
+              # never recreated after a TrueNAS boot-environment update, or
+              # written with no disks enumerated, then every selector here goes
+              # empty. Crucially `count by (instance) (...)` and
+              # `time() - <ts>` both yield NO SAMPLE rather than a zero, so the
+              # whole group silently stops being able to fire and nothing pages.
+              #
+              # NodeDown does not cover this: node_exporter is still up and
+              # serving, it simply has nothing to serve. That is the failure
+              # mode this lab keeps repeating, where a green liveness check sits
+              # on top of a collector that stopped producing data.
+              #
+              # absent() needs a fully specified selector to carry a label set,
+              # hence the explicit instance. There is one NAS; a second would
+              # need its own branch here, which is the price of having an
+              # absence alert at all.
+              expr: |
+                absent(smart_device_health{job="vm-node-exporter", instance="truenas"})
+                or
+                absent(zfs_smart_textfile_last_run_timestamp_seconds{job="vm-node-exporter", instance="truenas"})
+              for: 15m
+              labels:
+                severity: critical
+              annotations:
+                summary: "No pool or SMART metrics at all from {{ $labels.instance }}"
+                description: "{{ $labels.instance }} is exporting no SMART disk series or no exporter timestamp, so every pool and drive-health alert in this group is blind rather than merely quiet. node_exporter being up proves nothing here. Check that /var/lib/node_exporter/textfiles/zfs_smart.prom exists and that zfs-smart-textfile.timer survived the last boot-environment update."
             - alert: ZfsSmartExporterStale
               # Every rule above reads a textfile that one timer writes. If that
               # timer dies the series go stale and then absent, and all of the
