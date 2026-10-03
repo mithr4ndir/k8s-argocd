@@ -1140,38 +1140,51 @@ kube-prometheus-stack:
               annotations:
                 summary: "SMART health FAILED on {{ $labels.device }} ({{ $labels.model }})"
                 description: "{{ $labels.device }} serial {{ $labels.serial }} on {{ $labels.instance }} failed its SMART overall-health check. Capture `smartctl -a /dev/{{ $labels.device }}` before replacing it, the output is the RMA evidence."
-            - alert: SmartCollectFailed
+            - alert: SmartScrapeFailed
               # Distinct from a FAILED health check: the device is present but
               # smartctl could not be read at all (exit bits 0-1). Without this
               # the disk would simply stop being reported, which on a dashboard
               # is indistinguishable from healthy.
-              expr: smart_collect_ok{job="vm-node-exporter"} == 0
+              expr: smart_scrape_ok{job="vm-node-exporter"} == 0
               for: 15m
               labels:
                 severity: warning
               annotations:
                 summary: "Cannot read SMART data from {{ $labels.device }}"
                 description: "smartctl returned no usable output for {{ $labels.device }} on {{ $labels.instance }} for 15 minutes. The device is present but unreadable, which is how a drive dropping off the SATA bus begins."
-            - alert: SmartDeviceDisappeared
-              # Best effort, and deliberately not the primary signal. Once the
-              # device has been gone longer than the offset window the left
-              # side expires too and this resolves on its own, which is exactly
-              # why ZfsPoolNotOnline above carries the critical severity.
-              #
-              # This only catches a PARTIAL loss. If every disk stops reporting
-              # at once the left-hand count emits no sample rather than a zero
-              # and this cannot fire at all; SmartMetricsAbsent below covers
-              # that, which is the more severe case of the same condition.
+            - alert: SmartDevicesNone
+              # smart_devices_total is written after the device loop whether or
+              # not any disk was readable, so a total loss shows up as a real
+              # zero rather than an absent series. That is strictly better than
+              # comparing count() against count() an hour ago: it cannot expire
+              # out from under itself, and it fires immediately instead of
+              # waiting for the offset window.
+              expr: smart_devices_total{job="vm-node-exporter"} == 0
+              for: 10m
+              labels:
+                severity: critical
+              annotations:
+                summary: "{{ $labels.instance }} can read SMART from no disks at all"
+                description: "The exporter on {{ $labels.instance }} ran but could not read a single disk. Device enumeration is failing rather than one drive being sick. Check `lsblk`, and `dmesg` for ata link errors. Bay mapping: LED diskN = ataN = Nth tray left to right, NOT sd letters."
+            - alert: SmartDeviceCountDropped
+              # Partial loss: some disks still readable, fewer than before. Uses
+              # the exporter's counter rather than count() over the per-disk
+              # series, so the comparison still has a left-hand side when every
+              # disk goes away (SmartDevicesNone then carries it at critical).
+              # Subtraction rather than `<` so that $value is the number of
+              # disks LOST. With `a < b` Prometheus hands the annotation the
+              # left-hand side, so "{{ $value }} fewer disks" would have printed
+              # the current count and read as a much bigger loss than occurred.
               expr: |
-                count by (instance) (smart_device_health{job="vm-node-exporter"})
-                  <
-                count by (instance) (smart_device_health{job="vm-node-exporter"} offset 1h)
+                smart_devices_total{job="vm-node-exporter"} offset 1h
+                  -
+                smart_devices_total{job="vm-node-exporter"} > 0
               for: 10m
               labels:
                 severity: warning
               annotations:
-                summary: "A disk stopped reporting SMART data on {{ $labels.instance }}"
-                description: "{{ $labels.instance }} is reporting SMART for fewer disks than it was an hour ago, which is what a drive falling off the bus looks like. Compare `lsblk` against the expected bay map and check `dmesg` for ata link errors. Bay mapping: LED diskN = ataN = Nth tray left to right, NOT sd letters."
+                summary: "Fewer readable disks on {{ $labels.instance }} than an hour ago"
+                description: "{{ $labels.instance }} can read SMART from {{ $value }} fewer disks than it could an hour ago, which is what a drive falling off the SATA bus looks like. Compare `lsblk` against the expected bay map and check `dmesg` for ata link errors."
             - alert: SmartCrcErrorsIncreasing
               # UDMA CRC errors are the classic signature of a flaky SATA link
               # or cable rather than dying flash, so this is the closest early
@@ -1192,6 +1205,26 @@ kube-prometheus-stack:
               annotations:
                 summary: "Reallocated sectors increasing on {{ $labels.device }}"
                 description: "{{ $labels.device }} ({{ $labels.model }}, serial {{ $labels.serial }}) on {{ $labels.instance }} gained {{ $value | printf \"%.0f\" }} reallocated sectors in 24h. Media is being retired; plan replacement."
+            - alert: SmartPrefailAttributeBelowThreshold
+              # smartctl exit bit 4. A prefail attribute at or below threshold
+              # is the vendor saying this drive is expected to fail, which is a
+              # stronger statement than a rising counter.
+              expr: smart_prefail_below_threshold{job="vm-node-exporter"} == 1
+              for: 15m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Prefail attribute below threshold on {{ $labels.device }}"
+                description: "{{ $labels.device }} ({{ $labels.model }}, serial {{ $labels.serial }}) on {{ $labels.instance }} has a prefail attribute at or below its threshold. Capture `smartctl -a /dev/{{ $labels.device }}` now, that output is the RMA evidence."
+            - alert: SmartErrorLogHasErrors
+              # smartctl exit bit 6.
+              expr: smart_error_log_has_errors{job="vm-node-exporter"} == 1
+              for: 30m
+              labels:
+                severity: warning
+              annotations:
+                summary: "SMART error log is not empty on {{ $labels.device }}"
+                description: "{{ $labels.device }} ({{ $labels.model }}, serial {{ $labels.serial }}) on {{ $labels.instance }} has entries in its SMART error log. Read them with `smartctl -l error /dev/{{ $labels.device }}` before assuming the drive is fine."
             - alert: SmartMetricsAbsent
               # Every rule in this group reads one textfile. If it is deleted,
               # never recreated after a TrueNAS boot-environment update, or
@@ -1209,6 +1242,14 @@ kube-prometheus-stack:
               # hence the explicit instance. There is one NAS; a second would
               # need its own branch here, which is the price of having an
               # absence alert at all.
+              #
+              # Anchored on smart_device_health and the timestamp, NOT on
+              # smart_devices_total, even though that gauge is the better zero
+              # signal elsewhere in this group. smart_devices_total arrived with
+              # ansible-quasarlab#209 and is not deployed to the NAS yet, so an
+              # absent() on it would fire a false critical the moment these rules
+              # land. The other rules that read the new metrics are merely inert
+              # until that deploy, which is safe; an absence rule is not.
               expr: |
                 absent(smart_device_health{job="vm-node-exporter", instance="truenas"})
                 or
