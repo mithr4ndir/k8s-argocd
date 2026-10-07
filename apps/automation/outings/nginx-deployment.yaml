@@ -27,6 +27,11 @@ spec:
         runAsNonRoot: true
         runAsUser: 101
         runAsGroup: 101
+        # The job (65532:65532) creates site/ group-readable but not world-
+        # readable (0750 on the NFS export), so nginx reads it through the
+        # group. state/ is 0700 and history.json 0600: still unreadable.
+        supplementalGroups:
+        - 65532
         seccompProfile:
           type: RuntimeDefault
       containers:
