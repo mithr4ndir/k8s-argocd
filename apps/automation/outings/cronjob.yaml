@@ -44,8 +44,7 @@ spec:
               type: RuntimeDefault
           containers:
           - name: outings
-            # TODO(before merge): pin to the first CI-built digest.
-            image: ghcr.io/mithr4ndir/outings:0.1.0
+            image: ghcr.io/mithr4ndir/outings:0.1.0@sha256:eb62b5ffbb4d9491b02ab42e3d4b3de1da8ce42b99112d5d2055540e6fb6ac71
             imagePullPolicy: IfNotPresent
             args:
             - weekly
