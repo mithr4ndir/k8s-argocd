@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: outings-web
+  namespace: automation
+  labels:
+    app.kubernetes.io/name: outings
+    app.kubernetes.io/component: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: outings
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: outings
+        app.kubernetes.io/component: web
+      annotations:
+        # Bump to roll the pod after editing nginx-configmap.yaml.
+        outings.quasarlab/config-rev: "1"
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: nginx
+        image: nginxinc/nginx-unprivileged:1.29.2-alpine-slim@sha256:14a9e060b329d9df5d7cc65209f03eab9eefe42c17bfbeb35b93a1f0772f1522
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 30
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 200m
+            memory: 64Mi
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: conf
+          mountPath: /etc/nginx/conf.d
+          readOnly: true
+        - name: data
+          mountPath: /srv
+          readOnly: true
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 64Mi
+      - name: conf
+        configMap:
+          name: outings-web
+      - name: data
+        persistentVolumeClaim:
+          claimName: outings-data
+          readOnly: true

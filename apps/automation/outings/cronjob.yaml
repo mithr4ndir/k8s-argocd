@@ -1,0 +1,83 @@
+# Weekly outings: SF and Bay Area events for the next two weeks, found by
+# claude with web search. Every event's date is checked against its own page
+# before it is kept. Posts the top three picks to Discord and writes the full
+# digest page, served by outings-web at http://192.168.1.236/.
+# Source: https://github.com/mithr4ndir/outings
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: outings
+  namespace: automation
+  labels:
+    app.kubernetes.io/name: outings
+    app.kubernetes.io/component: digest
+spec:
+  schedule: "50 8 * * 0"
+  timeZone: America/Los_Angeles
+  # history.json must never have two writers.
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # Age out finished Jobs so KubeJobFailed does not keep firing on old history.
+      ttlSecondsAfterFinished: 604800
+      # No retry: a retry is another full model run, and a failure alerts anyway.
+      backoffLimit: 0
+      activeDeadlineSeconds: 2400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: outings
+            app.kubernetes.io/component: digest
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            fsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - name: outings
+            image: ghcr.io/mithr4ndir/outings:0.1.0@sha256:eb62b5ffbb4d9491b02ab42e3d4b3de1da8ce42b99112d5d2055540e6fb6ac71
+            imagePullPolicy: IfNotPresent
+            args:
+            - weekly
+            env:
+            - name: OUTINGS_DATA_DIR
+              value: /data
+            - name: OUTINGS_PAGE_URL
+              value: http://192.168.1.236/
+            envFrom:
+            - secretRef:
+                name: outings-secrets
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                cpu: "1"
+                memory: 1Gi
+            volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: data
+              mountPath: /data
+          volumes:
+          - name: tmp
+            emptyDir:
+              sizeLimit: 512Mi
+          - name: data
+            persistentVolumeClaim:
+              claimName: outings-data

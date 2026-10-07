@@ -1,0 +1,37 @@
+# Static digest pages only. The page has no scripts, and the CSP forbids
+# them anyway, so a model string that slipped past escaping cannot run.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: outings-web
+  namespace: automation
+  labels:
+    app.kubernetes.io/name: outings
+data:
+  default.conf: |
+    server {
+        listen 8080;
+        server_name _;
+        server_tokens off;
+        root /srv/site;
+        index index.html;
+        autoindex off;
+        charset utf-8;
+
+        add_header Content-Security-Policy "default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Referrer-Policy no-referrer always;
+        add_header X-Frame-Options DENY always;
+
+        location / {
+            limit_except GET { deny all; }
+            try_files $uri $uri/ =404;
+        }
+        location = /healthz {
+            access_log off;
+            default_type text/plain;
+            return 200 "ok\n";
+        }
+        # Dotfiles include the job's in-flight temp files.
+        location ~ /\. { deny all; }
+    }

@@ -1,0 +1,69 @@
+# The job: the model can WebFetch pages and the script fetches every event
+# page it names, and page text is untrusted. The script refuses private
+# addresses; this is the second layer: DNS and public HTTPS only, nothing on
+# the lab LAN or inside the cluster.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: outings-job
+  namespace: automation
+  labels:
+    app.kubernetes.io/name: outings
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: outings
+      app.kubernetes.io/component: digest
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress: []
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+        - 100.64.0.0/10
+        - 169.254.0.0/16
+        - 127.0.0.0/8
+    ports:
+    - protocol: TCP
+      port: 443
+---
+# The page server: HTTP in from the LAN (through the MetalLB service), no
+# egress at all. It only serves static files from the volume.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: outings-web
+  namespace: automation
+  labels:
+    app.kubernetes.io/name: outings
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: outings
+      app.kubernetes.io/component: web
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - ports:
+    - protocol: TCP
+      port: 8080
+  egress: []
