@@ -1,0 +1,244 @@
+# promtool unit tests for the TrueNAS pool and SMART alerts.
+#
+# These metrics had no alerts at all before this group, so the point of every
+# test here is that the rule FIRES on the specific failure it is meant to
+# catch. A rule that returns nothing today looks identical to a correct one,
+# and this lab has been bitten by exactly that (node_exporter systemd
+# allowlists made three real outages unalertable).
+#
+# Label sets mirror what the exporter actually produces, taken from a live
+# query on 2026-09-27: all eight disks reported health 1 with zero CRC and zero
+# reallocated sectors, and both pools were ONLINE.
+rule_files:
+  - rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  # --- the failure this lab actually has -------------------------------------
+  - interval: 1m
+    name: a degraded tank pool pages, and boot-pool staying ONLINE does not
+    input_series:
+      - series: 'zfs_pool_health{job="vm-node-exporter", instance="truenas", pool="tank"}'
+        values: '0+0x5 1+0x20'
+      - series: 'zfs_pool_health{job="vm-node-exporter", instance="truenas", pool="boot-pool"}'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ZfsPoolNotOnline
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: ZfsPoolNotOnline
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: vm-node-exporter
+              instance: truenas
+              pool: tank
+            exp_annotations:
+              summary: "ZFS pool tank is not ONLINE"
+              description: "Pool tank on truenas reports health code 1 (0=ONLINE 1=DEGRADED 2=FAULTED 3=OFFLINE 4=UNAVAIL 5=REMOVED 6=UNKNOWN). Check `zpool status -v tank`. Do NOT make pool topology changes mid-incident."
+
+  # --- the case the exporter bug made unreachable ----------------------------
+  - interval: 1m
+    name: a disk failing its SMART health check pages
+    input_series:
+      - series: 'smart_device_health{job="vm-node-exporter", instance="truenas", device="sdb", model="Inland SATA SSD", serial="IB24AK0004S00004"}'
+        values: '0x30'
+      - series: 'smart_device_health{job="vm-node-exporter", instance="truenas", device="sdf", model="WD Blue SA510 2.5 4TB", serial="24230KD00005"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: SmartDeviceHealthFailed
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: vm-node-exporter
+              instance: truenas
+              device: sdb
+              model: Inland SATA SSD
+              serial: IB24AK0004S00004
+            exp_annotations:
+              summary: "SMART health FAILED on sdb (Inland SATA SSD)"
+              description: "sdb serial IB24AK0004S00004 on truenas failed its SMART overall-health check. Capture `smartctl -a /dev/sdb` before replacing it, the output is the RMA evidence."
+
+  - interval: 1m
+    name: a present but unreadable device warns, and healthy ones do not
+    input_series:
+      - series: 'smart_scrape_ok{job="vm-node-exporter", instance="truenas", device="sdc"}'
+        values: '0x30'
+      - series: 'smart_scrape_ok{job="vm-node-exporter", instance="truenas", device="sdd"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: SmartScrapeFailed
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: SmartScrapeFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: truenas
+              device: sdc
+            exp_annotations:
+              summary: "Cannot read SMART data from sdc"
+              description: "smartctl returned no usable output for sdc on truenas for 15 minutes. The device is present but unreadable, which is how a drive dropping off the SATA bus begins."
+
+  # --- drive falls off the bus: a real zero, not a vanished series -----------
+  - interval: 1m
+    name: no readable disks at all pages, using the exporter's own zero
+    input_series:
+      - series: 'smart_devices_total{job="vm-node-exporter", instance="truenas"}'
+        values: '8+0x10 0+0x30'
+      - series: 'zfs_smart_textfile_last_run_timestamp_seconds{job="vm-node-exporter", instance="truenas"}'
+        values: '0+60x45'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: SmartDevicesNone
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: SmartDevicesNone
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: vm-node-exporter
+              instance: truenas
+            exp_annotations:
+              summary: "truenas can read SMART from no disks at all"
+              description: "The exporter on truenas ran but could not read a single disk. Device enumeration is failing rather than one drive being sick. Check `lsblk`, and `dmesg` for ata link errors. Bay mapping: LED diskN = ataN = Nth tray left to right, NOT sd letters."
+      # The exporter is alive and writing, so staleness must stay silent. This
+      # is the case that made the old count()-based rule unable to fire at all.
+      - eval_time: 25m
+        alertname: ZfsSmartExporterStale
+        exp_alerts: []
+      # SmartMetricsAbsent also fires here, and that is deliberate: with no disk
+      # readable there are no per-disk series, which really is total blindness
+      # for every per-disk rule. SmartDevicesNone carries the specific cause and
+      # SmartMetricsAbsent the general one. Two criticals on genuine blindness is
+      # the right trade against missing one, and the alternative (requiring the
+      # timestamp to be absent too) reopens the hole whenever smart_devices_total
+      # is itself missing, which is the state the NAS is in until #209 deploys.
+      - eval_time: 25m
+        alertname: SmartMetricsAbsent
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: vm-node-exporter
+              instance: truenas
+            exp_annotations:
+              summary: "No pool or SMART metrics at all from truenas"
+              description: "truenas is exporting no SMART disk series or no exporter timestamp, so every pool and drive-health alert in this group is blind rather than merely quiet. node_exporter being up proves nothing here. Check that /var/lib/node_exporter/textfiles/zfs_smart.prom exists and that zfs-smart-textfile.timer survived the last boot-environment update."
+
+  - interval: 1m
+    name: losing one disk of eight warns without claiming total loss
+    input_series:
+      - series: 'smart_devices_total{job="vm-node-exporter", instance="truenas"}'
+        values: '8+0x70 7+0x60'
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: SmartDeviceCountDropped
+        exp_alerts: []
+      - eval_time: 90m
+        alertname: SmartDeviceCountDropped
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: truenas
+            exp_annotations:
+              summary: "Fewer readable disks on truenas than an hour ago"
+              description: "truenas can read SMART from 1 fewer disks than it could an hour ago, which is what a drive falling off the SATA bus looks like. Compare `lsblk` against the expected bay map and check `dmesg` for ata link errors."
+      - eval_time: 90m
+        alertname: SmartDevicesNone
+        exp_alerts: []
+
+  # --- the bitmask findings #209 exposed and left unalerted ------------------
+  - interval: 1m
+    name: a prefail attribute below threshold pages
+    input_series:
+      - series: 'smart_prefail_below_threshold{job="vm-node-exporter", instance="truenas", device="sdb", model="Inland SATA SSD", serial="IB24AK0004S00004"}'
+        values: '1x40'
+      - series: 'smart_prefail_below_threshold{job="vm-node-exporter", instance="truenas", device="sdf", model="WD Blue SA510 2.5 4TB", serial="24230KD00005"}'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: SmartPrefailAttributeBelowThreshold
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: vm-node-exporter
+              instance: truenas
+              device: sdb
+              model: Inland SATA SSD
+              serial: IB24AK0004S00004
+            exp_annotations:
+              summary: "Prefail attribute below threshold on sdb"
+              description: "sdb (Inland SATA SSD, serial IB24AK0004S00004) on truenas has a prefail attribute at or below its threshold. Capture `smartctl -a /dev/sdb` now, that output is the RMA evidence."
+
+  - interval: 1m
+    name: a non-empty SMART error log warns
+    input_series:
+      - series: 'smart_error_log_has_errors{job="vm-node-exporter", instance="truenas", device="sdc", model="Inland SATA SSD", serial="IB24AK0004S00013"}'
+        values: '1x60'
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: SmartErrorLogHasErrors
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: truenas
+              device: sdc
+              model: Inland SATA SSD
+              serial: IB24AK0004S00013
+            exp_annotations:
+              summary: "SMART error log is not empty on sdc"
+              description: "sdc (Inland SATA SSD, serial IB24AK0004S00013) on truenas has entries in its SMART error log. Read them with `smartctl -l error /dev/sdc` before assuming the drive is fine."
+
+  # --- total blindness: the textfile itself is gone -------------------------
+  - interval: 1m
+    name: a missing textfile pages, since every other rule here goes blind
+    input_series:
+      - series: 'zfs_pool_health{job="vm-node-exporter", instance="truenas", pool="tank"}'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: SmartMetricsAbsent
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: vm-node-exporter
+              instance: truenas
+            exp_annotations:
+              summary: "No pool or SMART metrics at all from truenas"
+              description: "truenas is exporting no SMART disk series or no exporter timestamp, so every pool and drive-health alert in this group is blind rather than merely quiet. node_exporter being up proves nothing here. Check that /var/lib/node_exporter/textfiles/zfs_smart.prom exists and that zfs-smart-textfile.timer survived the last boot-environment update."
+      # Neither of these can fire on absent series: that is the hole this pins.
+      - eval_time: 20m
+        alertname: SmartDevicesNone
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: ZfsSmartExporterStale
+        exp_alerts: []
+
+  - interval: 1m
+    name: a fully healthy exporter triggers none of the absence rules
+    input_series:
+      - series: 'smart_devices_total{job="vm-node-exporter", instance="truenas"}'
+        values: '8x40'
+      # A healthy exporter is of course publishing per-disk health too; leaving
+      # it out made this fixture describe a half-broken NAS, not a healthy one.
+      - series: 'smart_device_health{job="vm-node-exporter", instance="truenas", device="sda", model="Inland SATA SSD", serial="IB24AJ0004S00183"}'
+        values: '1x40'
+      - series: 'zfs_smart_textfile_last_run_timestamp_seconds{job="vm-node-exporter", instance="truenas"}'
+        values: '0+60x45'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: SmartMetricsAbsent
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: SmartDevicesNone
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: SmartDeviceCountDropped
+        exp_alerts: []
