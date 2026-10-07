@@ -1,0 +1,25 @@
+# LAN only: MetalLB hands out 192.168.1.236 from the 225-240 pool. Open
+# http://192.168.1.236/ on home Wi-Fi; the Discord message links there.
+apiVersion: v1
+kind: Service
+metadata:
+  name: outings-web
+  namespace: automation
+  labels:
+    app.kubernetes.io/name: outings
+    app.kubernetes.io/component: web
+  annotations:
+    metallb.universe.tf/loadBalancerIPs: 192.168.1.236
+spec:
+  type: LoadBalancer
+  # Cluster, as for the other automation services: only some MetalLB
+  # speakers are reliably elected in this cluster.
+  externalTrafficPolicy: Cluster
+  selector:
+    app.kubernetes.io/name: outings
+    app.kubernetes.io/component: web
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP

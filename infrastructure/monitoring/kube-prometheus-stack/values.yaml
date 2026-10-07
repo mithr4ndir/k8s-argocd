@@ -984,6 +984,26 @@ kube-prometheus-stack:
                 summary: "Radagast has not posted a lab ideas digest in over 8 days"
                 description: "CronJob automation/lab-scout has had no successful run for {{ $value | humanizeDuration }}. Check `kubectl -n automation get jobs -l app.kubernetes.io/name=lab-scout` and the last pod's logs."
 
+        - name: outings
+          rules:
+            # Weekly CronJob (apps/automation/outings), same shape as
+            # LabScoutDigestStale. The job exits non-zero when it posts
+            # nothing (too few checked events, model or post failure), so a
+            # missed week shows here as well as in KubeJobFailed.
+            - alert: OutingsDigestStale
+              expr: |
+                (time() - kube_cronjob_status_last_successful_time{namespace="automation",cronjob="outings"} > 691200)
+                or
+                ((time() - kube_cronjob_created{namespace="automation",cronjob="outings"} > 691200)
+                  unless on(namespace, cronjob)
+                  kube_cronjob_status_last_successful_time{namespace="automation",cronjob="outings"})
+              for: 1h
+              labels:
+                severity: warning
+              annotations:
+                summary: "The weekly outings digest has not been sent in over 8 days"
+                description: "CronJob automation/outings has had no successful run for {{ $value | humanizeDuration }}. Check `kubectl -n automation get jobs -l app.kubernetes.io/name=outings` and the last pod's logs (look for event=digest_failed)."
+
     agent-cmd-audit-alerts:
       groups:
         # Feed that posts every Bash command an AI agent runs on

@@ -1,0 +1,19 @@
+# site/   the rendered digests, served read-only by the outings-web nginx
+# state/  history.json (what was already suggested). Not served: nginx's root
+#         is site/, and the job writes state/ as 0700.
+# JSON files written with rename, not SQLite, so NFS is fine here.
+# ReadWriteMany: the CronJob pod and the nginx pod may land on different nodes.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: outings-data
+  namespace: automation
+  labels:
+    app.kubernetes.io/name: outings
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: k8s-nfs
+  resources:
+    requests:
+      storage: 256Mi

@@ -12,4 +12,5 @@ resources:
   # - claude-bridge/
   - donchian-signal/
   - lab-scout/
+  - outings/
   - dream-team/
