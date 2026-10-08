@@ -1336,6 +1336,24 @@ kube-prometheus-stack:
               annotations:
                 summary: "ZFS/SMART exporter on {{ $labels.instance }} is stale"
                 description: "The zfs-smart-textfile timer on {{ $labels.instance }} last wrote {{ $value | humanizeDuration }} ago. Until it runs again every pool and SMART alert in this group is blind. Check `systemctl status zfs-smart-textfile.timer` and that it survived a boot-environment update."
+            - alert: BayLedsServiceDown
+              # bay-leds.service (ansible-quasarlab roles/truenas) paints the
+              # tray to pull red. If it dies the panel either pulses purple
+              # (ExecStopPost) or, after a SIGKILL or a hung loop, freezes in
+              # its last state, which may look healthy. The heartbeat textfile
+              # is the only way to tell from outside. absent() covers the
+              # service never starting, e.g. i2c-dev failing to load, or a
+              # boot-environment update dropping the unit.
+              expr: |
+                time() - bay_leds_last_loop_timestamp_seconds{job="vm-node-exporter"} > 300
+                or
+                absent(bay_leds_last_loop_timestamp_seconds{job="vm-node-exporter", instance="truenas"})
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Bay LED service on {{ $labels.instance }} is not running"
+                description: "The front-panel bay LEDs on {{ $labels.instance }} are not being driven, so a faulted disk will NOT light its tray red, and the panel may be frozen in a healthy-looking state. Check `systemctl status bay-leds.service` and `journalctl -u bay-leds`; `ExecStartPre` needs `modprobe i2c-dev`."
     media-service-health:
       groups:
         - name: media-services
