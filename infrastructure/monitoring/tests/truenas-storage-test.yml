@@ -43,7 +43,7 @@ tests:
   - interval: 1m
     name: a disk failing its SMART health check pages
     input_series:
-      - series: 'smart_device_health{job="vm-node-exporter", instance="truenas", device="sdb", model="Inland SATA SSD", serial="IB24AK0004S00004"}'
+      - series: 'smart_device_health{job="vm-node-exporter", instance="truenas", device="sdb", bay="5", model="Inland SATA SSD", serial="IB24AK0004S00004"}'
         values: '0x30'
       - series: 'smart_device_health{job="vm-node-exporter", instance="truenas", device="sdf", model="WD Blue SA510 2.5 4TB", serial="24230KD00005"}'
         values: '1x30'
@@ -56,18 +56,19 @@ tests:
               job: vm-node-exporter
               instance: truenas
               device: sdb
+              bay: "5"
               model: Inland SATA SSD
               serial: IB24AK0004S00004
             exp_annotations:
-              summary: "SMART health FAILED on sdb (Inland SATA SSD)"
-              description: "sdb serial IB24AK0004S00004 on truenas failed its SMART overall-health check. Capture `smartctl -a /dev/sdb` before replacing it, the output is the RMA evidence."
+              summary: "SMART health FAILED on bay 5 (IB24AK0004S00004, Inland SATA SSD)"
+              description: "Bay 5, serial IB24AK0004S00004 (currently sdb) on truenas failed its SMART overall-health check. Capture `smartctl -a /dev/sdb` before replacing it, the output is the RMA evidence."
 
   - interval: 1m
     name: a present but unreadable device warns, and healthy ones do not
     input_series:
-      - series: 'smart_scrape_ok{job="vm-node-exporter", instance="truenas", device="sdc"}'
+      - series: 'smart_scrape_ok{job="vm-node-exporter", instance="truenas", device="sdc", bay="2", serial="IB24AK0004S00013"}'
         values: '0x30'
-      - series: 'smart_scrape_ok{job="vm-node-exporter", instance="truenas", device="sdd"}'
+      - series: 'smart_scrape_ok{job="vm-node-exporter", instance="truenas", device="sdd", bay="3", serial="IB24AK0004S00064"}'
         values: '1x30'
     alert_rule_test:
       - eval_time: 5m
@@ -81,9 +82,11 @@ tests:
               job: vm-node-exporter
               instance: truenas
               device: sdc
+              bay: "2"
+              serial: IB24AK0004S00013
             exp_annotations:
-              summary: "Cannot read SMART data from sdc"
-              description: "smartctl returned no usable output for sdc on truenas for 15 minutes. The device is present but unreadable, which is how a drive dropping off the SATA bus begins."
+              summary: "Cannot read SMART data from bay 2 (IB24AK0004S00013)"
+              description: "smartctl returned no usable output for bay 2, serial IB24AK0004S00013 (currently sdc) on truenas for 15 minutes. The device is present but unreadable, which is how a drive dropping off the SATA bus begins."
 
   # --- drive falls off the bus: a real zero, not a vanished series -----------
   - interval: 1m
@@ -157,9 +160,9 @@ tests:
   - interval: 1m
     name: a prefail attribute below threshold pages
     input_series:
-      - series: 'smart_prefail_below_threshold{job="vm-node-exporter", instance="truenas", device="sdb", model="Inland SATA SSD", serial="IB24AK0004S00004"}'
+      - series: 'smart_prefail_below_threshold{job="vm-node-exporter", instance="truenas", device="sdb", bay="5", model="Inland SATA SSD", serial="IB24AK0004S00004"}'
         values: '1x40'
-      - series: 'smart_prefail_below_threshold{job="vm-node-exporter", instance="truenas", device="sdf", model="WD Blue SA510 2.5 4TB", serial="24230KD00005"}'
+      - series: 'smart_prefail_below_threshold{job="vm-node-exporter", instance="truenas", device="sdf", bay="8", model="WD Blue SA510 2.5 4TB", serial="24230KD00005"}'
         values: '0x40'
     alert_rule_test:
       - eval_time: 20m
@@ -170,16 +173,17 @@ tests:
               job: vm-node-exporter
               instance: truenas
               device: sdb
+              bay: "5"
               model: Inland SATA SSD
               serial: IB24AK0004S00004
             exp_annotations:
-              summary: "Prefail attribute below threshold on sdb"
-              description: "sdb (Inland SATA SSD, serial IB24AK0004S00004) on truenas has a prefail attribute at or below its threshold. Capture `smartctl -a /dev/sdb` now, that output is the RMA evidence."
+              summary: "Prefail attribute below threshold on bay 5 (IB24AK0004S00004)"
+              description: "Bay 5, sdb (Inland SATA SSD, serial IB24AK0004S00004) on truenas has a prefail attribute at or below its threshold. Capture `smartctl -a /dev/sdb` now, that output is the RMA evidence."
 
   - interval: 1m
     name: a non-empty SMART error log warns
     input_series:
-      - series: 'smart_error_log_has_errors{job="vm-node-exporter", instance="truenas", device="sdc", model="Inland SATA SSD", serial="IB24AK0004S00013"}'
+      - series: 'smart_error_log_has_errors{job="vm-node-exporter", instance="truenas", device="sdc", bay="2", model="Inland SATA SSD", serial="IB24AK0004S00013"}'
         values: '1x60'
     alert_rule_test:
       - eval_time: 40m
@@ -190,11 +194,12 @@ tests:
               job: vm-node-exporter
               instance: truenas
               device: sdc
+              bay: "2"
               model: Inland SATA SSD
               serial: IB24AK0004S00013
             exp_annotations:
-              summary: "SMART error log is not empty on sdc"
-              description: "sdc (Inland SATA SSD, serial IB24AK0004S00013) on truenas has entries in its SMART error log. Read them with `smartctl -l error /dev/sdc` before assuming the drive is fine."
+              summary: "SMART error log is not empty on bay 2 (IB24AK0004S00013)"
+              description: "Bay 2, sdc (Inland SATA SSD, serial IB24AK0004S00013) on truenas has entries in its SMART error log. Read them with `smartctl -l error /dev/sdc` before assuming the drive is fine."
 
   # --- total blindness: the textfile itself is gone -------------------------
   - interval: 1m
@@ -242,3 +247,114 @@ tests:
       - eval_time: 30m
         alertname: SmartDeviceCountDropped
         exp_alerts: []
+
+  # --- per-disk ZFS state: the 2026-10-08 bay 3 failure, replayed ------------
+  # What the NAS actually did: bay 3 (IB24AK0004S00064) went FAULTED at 08:46
+  # and stayed that way until the 09:15 reseat, while tank's pool-level health
+  # stayed ONLINE the whole time. ZfsPoolNotOnline therefore never fired. The
+  # per-disk rule must fire, and must name the tray and the surviving partner.
+  - interval: 1m
+    name: 2026-10-08 replay, a FAULTED mirror member pages while the pool says ONLINE
+    input_series:
+      - series: 'zfs_pool_health{job="vm-node-exporter", instance="truenas", pool="tank"}'
+        values: '0x45'
+      - series: 'zfs_vdev_state{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", guid="16921602523873656744", name="701d7b32-63bb-4ae2-8501-73261bcff843", device="sdd", bay="3", serial="IB24AK0004S00064"}'
+        values: '0x5 2x29 0x10'
+      - series: 'zfs_vdev_state{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", guid="6314399114229375679", name="339fd304-fce6-45e9-8e63-bb0c164d8bfd", device="sdb", bay="5", serial="IB24AK0004S00004"}'
+        values: '0x45'
+      # A disk in another mirror must not appear in the partner list.
+      - series: 'zfs_vdev_state{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", guid="9868202756772434648", name="8045e2a1-7f91-4a2c-9587-6ae8bbe3c9bd", device="sdc", bay="2", serial="IB24AK0004S00013"}'
+        values: '0x45'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: ZfsVdevNotOnline
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: ZfsPoolNotOnline
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: ZfsVdevNotOnline
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: vm-node-exporter
+              instance: truenas
+              pool: tank
+              vdev: mirror-3
+              guid: "16921602523873656744"
+              name: 701d7b32-63bb-4ae2-8501-73261bcff843
+              device: sdd
+              bay: "3"
+              serial: IB24AK0004S00064
+            exp_annotations:
+              summary: "ZFS disk in bay 3 (IB24AK0004S00064) is FAULTED in tank/mirror-3"
+              description: "Pool tank mirror-3: bay 3, serial IB24AK0004S00064, currently sdd, state code 2. Rest of mirror-3: bay 5 (IB24AK0004S00004) ONLINE; Check `zpool status -v tank` and `journalctl -k | grep ata3`. Light the tray with `/root/ugreen_leds_cli disk3` before touching it, and confirm which port changed after a reseat."
+      # After the reseat the disk is back ONLINE and the alert resolves.
+      - eval_time: 40m
+        alertname: ZfsVdevNotOnline
+        exp_alerts: []
+
+  - interval: 1m
+    name: a deliberate one-minute reseat does not page
+    input_series:
+      - series: 'zfs_vdev_state{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", guid="16921602523873656744", name="701d7b32-63bb-4ae2-8501-73261bcff843", device="unknown", bay="3", serial="IB24AK0004S00064"}'
+        values: '0x5 5x1 0x10'
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: ZfsVdevNotOnline
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: ZfsVdevNotOnline
+        exp_alerts: []
+
+  - interval: 1m
+    name: ZFS write errors on a disk warn with its bay, and a zpool clear does not
+    input_series:
+      # 08:45 the write times out and ZFS counts 256 write errors; 09:15 the
+      # reseat plus `zpool clear` drops the counter back to 0.
+      - series: 'zfs_vdev_write_errors{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", guid="16921602523873656744", name="701d7b32-63bb-4ae2-8501-73261bcff843", device="sdd", bay="3", serial="IB24AK0004S00064"}'
+        values: '0x5 256x29 0x30'
+      - series: 'zfs_vdev_read_errors{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", guid="6314399114229375679", name="339fd304-fce6-45e9-8e63-bb0c164d8bfd", device="sdb", bay="5", serial="IB24AK0004S00004"}'
+        values: '0x65'
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: ZfsVdevErrorsIncreasing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: truenas
+              pool: tank
+              vdev: mirror-3
+              guid: "16921602523873656744"
+              name: 701d7b32-63bb-4ae2-8501-73261bcff843
+              device: sdd
+              bay: "3"
+              serial: IB24AK0004S00064
+              kind: write
+            exp_annotations:
+              summary: "ZFS write errors on bay 3 (IB24AK0004S00064)"
+              description: "Bay 3, serial IB24AK0004S00064 (tank/mirror-3, currently sdd) gained 256 write errors in 15m. On the Inland IB24AK drives this precedes the drive dropping off the bus. Check `zpool status -v tank`."
+      - eval_time: 55m
+        alertname: ZfsVdevErrorsIncreasing
+        exp_alerts: []
+
+  - interval: 1m
+    name: an unreadable zpool status warns, so per-disk silence is not mistaken for health
+    input_series:
+      - series: 'zfs_vdev_scrape_ok{job="vm-node-exporter", instance="truenas"}'
+        values: '1x5 0x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ZfsVdevMetricsUnreadable
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: ZfsVdevMetricsUnreadable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: truenas
+            exp_annotations:
+              summary: "Per-disk ZFS state unreadable on truenas"
+              description: "The exporter on truenas could not read or parse `zpool status -j -p` for 15 minutes, so ZfsVdevNotOnline is blind. Run it by hand on the NAS and check the JSON still has .pools[].vdevs."

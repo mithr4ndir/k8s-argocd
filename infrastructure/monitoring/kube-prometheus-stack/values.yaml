@@ -1139,11 +1139,10 @@ kube-prometheus-stack:
         # failing disk was visible on a dashboard and paged nobody.
         - name: truenas-storage
           rules:
-            # The durable signal for the failure this lab actually has: three
-            # Inland IB24AK SSDs in tank repeatedly drop off the SATA bus. When
-            # a vdev member vanishes ZFS degrades the pool and stays degraded,
-            # so unlike a disappearing per-disk series this cannot silently
-            # resolve itself.
+            # Whole-pool state. NOT sufficient for the failure this lab
+            # actually has: on 2026-10-08 the bay 3 drive was FAULTED for half
+            # an hour while `zpool list` kept saying tank was ONLINE, so this
+            # rule never fired. ZfsVdevNotOnline below covers that case.
             - alert: ZfsPoolNotOnline
               expr: zfs_pool_health{job="vm-node-exporter"} != 0
               for: 5m
@@ -1152,14 +1151,29 @@ kube-prometheus-stack:
               annotations:
                 summary: "ZFS pool {{ $labels.pool }} is not ONLINE"
                 description: "Pool {{ $labels.pool }} on {{ $labels.instance }} reports health code {{ $value }} (0=ONLINE 1=DEGRADED 2=FAULTED 3=OFFLINE 4=UNAVAIL 5=REMOVED 6=UNKNOWN). Check `zpool status -v {{ $labels.pool }}`. Do NOT make pool topology changes mid-incident."
+            - alert: ZfsVdevNotOnline
+              # Per-disk state from `zpool status -j`, labelled with the tray
+              # to pull (bay N = Nth tray from the left = kernel ataN) and the
+              # serial. Three Inland IB24AK drives in tank drop off the SATA bus
+              # repeatedly; this is the rule that names which one. The partner
+              # lookup says whether the rest of that mirror is still healthy,
+              # which decides how urgent it is: mirror-3 pairs two bad-batch
+              # drives. `for: 2m` lets a deliberate reseat finish without paging.
+              expr: zfs_vdev_state{job="vm-node-exporter"} != 0
+              for: 2m
+              labels:
+                severity: critical
+              annotations:
+                summary: "ZFS disk in bay {{ $labels.bay }} ({{ $labels.serial }}) is {{ if eq $value 1.0 }}DEGRADED{{ else if eq $value 2.0 }}FAULTED{{ else if eq $value 3.0 }}OFFLINE{{ else if eq $value 4.0 }}UNAVAIL{{ else if eq $value 5.0 }}REMOVED{{ else }}UNKNOWN{{ end }} in {{ $labels.pool }}/{{ $labels.vdev }}"
+                description: "Pool {{ $labels.pool }} {{ $labels.vdev }}: bay {{ $labels.bay }}, serial {{ $labels.serial }}, currently {{ $labels.device }}, state code {{ $value }}. Rest of {{ $labels.vdev }}:{{ range query (printf `zfs_vdev_state{job=\"vm-node-exporter\",pool=\"%s\",vdev=\"%s\",guid!=\"%s\"}` $labels.pool $labels.vdev $labels.guid) }} bay {{ .Labels.bay }} ({{ .Labels.serial }}) {{ if eq .Value 0.0 }}ONLINE{{ else }}NOT ONLINE, code {{ .Value }}{{ end }};{{ end }} Check `zpool status -v {{ $labels.pool }}` and `journalctl -k | grep ata{{ $labels.bay }}`. Light the tray with `/root/ugreen_leds_cli disk{{ $labels.bay }}` before touching it, and confirm which port changed after a reseat."
             - alert: SmartDeviceHealthFailed
               expr: smart_device_health{job="vm-node-exporter"} == 0
               for: 5m
               labels:
                 severity: critical
               annotations:
-                summary: "SMART health FAILED on {{ $labels.device }} ({{ $labels.model }})"
-                description: "{{ $labels.device }} serial {{ $labels.serial }} on {{ $labels.instance }} failed its SMART overall-health check. Capture `smartctl -a /dev/{{ $labels.device }}` before replacing it, the output is the RMA evidence."
+                summary: "SMART health FAILED on bay {{ $labels.bay }} ({{ $labels.serial }}, {{ $labels.model }})"
+                description: "Bay {{ $labels.bay }}, serial {{ $labels.serial }} (currently {{ $labels.device }}) on {{ $labels.instance }} failed its SMART overall-health check. Capture `smartctl -a /dev/{{ $labels.device }}` before replacing it, the output is the RMA evidence."
             - alert: SmartScrapeFailed
               # Distinct from a FAILED health check: the device is present but
               # smartctl could not be read at all (exit bits 0-1). Without this
@@ -1170,8 +1184,8 @@ kube-prometheus-stack:
               labels:
                 severity: warning
               annotations:
-                summary: "Cannot read SMART data from {{ $labels.device }}"
-                description: "smartctl returned no usable output for {{ $labels.device }} on {{ $labels.instance }} for 15 minutes. The device is present but unreadable, which is how a drive dropping off the SATA bus begins."
+                summary: "Cannot read SMART data from bay {{ $labels.bay }} ({{ $labels.serial }})"
+                description: "smartctl returned no usable output for bay {{ $labels.bay }}, serial {{ $labels.serial }} (currently {{ $labels.device }}) on {{ $labels.instance }} for 15 minutes. The device is present but unreadable, which is how a drive dropping off the SATA bus begins."
             - alert: SmartDevicesNone
               # smart_devices_total is written after the device loop whether or
               # not any disk was readable, so a total loss shows up as a real
@@ -1205,6 +1219,34 @@ kube-prometheus-stack:
               annotations:
                 summary: "Fewer readable disks on {{ $labels.instance }} than an hour ago"
                 description: "{{ $labels.instance }} can read SMART from {{ $value }} fewer disks than it could an hour ago, which is what a drive falling off the SATA bus looks like. Compare `lsblk` against the expected bay map and check `dmesg` for ata link errors."
+            - alert: ZfsVdevErrorsIncreasing
+              # ZFS's own read/write/checksum counters per disk. They reset on
+              # `zpool clear`, which increase() treats as a counter reset, so a
+              # clear does not fire this. The bay 3 failure on 2026-10-08 ran
+              # these to read 3 / write 256 before ZFS faulted the disk.
+              expr: |
+                label_replace(increase(zfs_vdev_read_errors{job="vm-node-exporter"}[15m]) > 0, "kind", "read", "", "")
+                or
+                label_replace(increase(zfs_vdev_write_errors{job="vm-node-exporter"}[15m]) > 0, "kind", "write", "", "")
+                or
+                label_replace(increase(zfs_vdev_checksum_errors{job="vm-node-exporter"}[15m]) > 0, "kind", "checksum", "", "")
+              for: 0m
+              labels:
+                severity: warning
+              annotations:
+                summary: "ZFS {{ $labels.kind }} errors on bay {{ $labels.bay }} ({{ $labels.serial }})"
+                description: "Bay {{ $labels.bay }}, serial {{ $labels.serial }} ({{ $labels.pool }}/{{ $labels.vdev }}, currently {{ $labels.device }}) gained {{ $value | printf \"%.0f\" }} {{ $labels.kind }} errors in 15m. On the Inland IB24AK drives this precedes the drive dropping off the bus. Check `zpool status -v {{ $labels.pool }}`."
+            - alert: ZfsVdevMetricsUnreadable
+              # Without this, a `zpool status -j` that stops working (TrueNAS
+              # update, changed JSON) would leave zero per-disk series, which
+              # looks exactly like every disk being fine.
+              expr: zfs_vdev_scrape_ok{job="vm-node-exporter"} == 0
+              for: 15m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Per-disk ZFS state unreadable on {{ $labels.instance }}"
+                description: "The exporter on {{ $labels.instance }} could not read or parse `zpool status -j -p` for 15 minutes, so ZfsVdevNotOnline is blind. Run it by hand on the NAS and check the JSON still has .pools[].vdevs."
             - alert: SmartCrcErrorsIncreasing
               # UDMA CRC errors are the classic signature of a flaky SATA link
               # or cable rather than dying flash, so this is the closest early
@@ -1215,16 +1257,16 @@ kube-prometheus-stack:
               labels:
                 severity: warning
               annotations:
-                summary: "SATA CRC errors increasing on {{ $labels.device }}"
-                description: "{{ $labels.device }} ({{ $labels.model }}, serial {{ $labels.serial }}) on {{ $labels.instance }} gained {{ $value | printf \"%.0f\" }} UDMA CRC errors in 6h. This usually means the link or cable, not the flash."
+                summary: "SATA CRC errors increasing on bay {{ $labels.bay }} ({{ $labels.serial }})"
+                description: "Bay {{ $labels.bay }}, {{ $labels.device }} ({{ $labels.model }}, serial {{ $labels.serial }}) on {{ $labels.instance }} gained {{ $value | printf \"%.0f\" }} UDMA CRC errors in 6h. This usually means the link or cable, not the flash."
             - alert: SmartReallocatedSectorsIncreasing
               expr: increase(smart_reallocated_sector_count{job="vm-node-exporter"}[24h]) > 0
               for: 30m
               labels:
                 severity: warning
               annotations:
-                summary: "Reallocated sectors increasing on {{ $labels.device }}"
-                description: "{{ $labels.device }} ({{ $labels.model }}, serial {{ $labels.serial }}) on {{ $labels.instance }} gained {{ $value | printf \"%.0f\" }} reallocated sectors in 24h. Media is being retired; plan replacement."
+                summary: "Reallocated sectors increasing on bay {{ $labels.bay }} ({{ $labels.serial }})"
+                description: "Bay {{ $labels.bay }}, {{ $labels.device }} ({{ $labels.model }}, serial {{ $labels.serial }}) on {{ $labels.instance }} gained {{ $value | printf \"%.0f\" }} reallocated sectors in 24h. Media is being retired; plan replacement."
             - alert: SmartPrefailAttributeBelowThreshold
               # smartctl exit bit 4. A prefail attribute at or below threshold
               # is the vendor saying this drive is expected to fail, which is a
@@ -1234,8 +1276,8 @@ kube-prometheus-stack:
               labels:
                 severity: critical
               annotations:
-                summary: "Prefail attribute below threshold on {{ $labels.device }}"
-                description: "{{ $labels.device }} ({{ $labels.model }}, serial {{ $labels.serial }}) on {{ $labels.instance }} has a prefail attribute at or below its threshold. Capture `smartctl -a /dev/{{ $labels.device }}` now, that output is the RMA evidence."
+                summary: "Prefail attribute below threshold on bay {{ $labels.bay }} ({{ $labels.serial }})"
+                description: "Bay {{ $labels.bay }}, {{ $labels.device }} ({{ $labels.model }}, serial {{ $labels.serial }}) on {{ $labels.instance }} has a prefail attribute at or below its threshold. Capture `smartctl -a /dev/{{ $labels.device }}` now, that output is the RMA evidence."
             - alert: SmartErrorLogHasErrors
               # smartctl exit bit 6.
               expr: smart_error_log_has_errors{job="vm-node-exporter"} == 1
@@ -1243,8 +1285,8 @@ kube-prometheus-stack:
               labels:
                 severity: warning
               annotations:
-                summary: "SMART error log is not empty on {{ $labels.device }}"
-                description: "{{ $labels.device }} ({{ $labels.model }}, serial {{ $labels.serial }}) on {{ $labels.instance }} has entries in its SMART error log. Read them with `smartctl -l error /dev/{{ $labels.device }}` before assuming the drive is fine."
+                summary: "SMART error log is not empty on bay {{ $labels.bay }} ({{ $labels.serial }})"
+                description: "Bay {{ $labels.bay }}, {{ $labels.device }} ({{ $labels.model }}, serial {{ $labels.serial }}) on {{ $labels.instance }} has entries in its SMART error log. Read them with `smartctl -l error /dev/{{ $labels.device }}` before assuming the drive is fine."
             - alert: SmartMetricsAbsent
               # Every rule in this group reads one textfile. If it is deleted,
               # never recreated after a TrueNAS boot-environment update, or
