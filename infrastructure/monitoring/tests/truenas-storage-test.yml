@@ -288,7 +288,7 @@ tests:
               serial: IB24AK0004S00064
             exp_annotations:
               summary: "ZFS disk in bay 3 (IB24AK0004S00064) is FAULTED in tank/mirror-3"
-              description: "Pool tank mirror-3: bay 3, serial IB24AK0004S00064, currently sdd, state code 2. Rest of mirror-3: bay 5 (IB24AK0004S00004) ONLINE; Check `zpool status -v tank` and `journalctl -k | grep ata3`. Light the tray with `/root/ugreen_leds_cli disk3` before touching it, and confirm which port changed after a reseat."
+              description: "Pool tank mirror-3: bay 3, serial IB24AK0004S00064, currently sdd, is FAULTED. Rest of mirror-3: bay 5 (IB24AK0004S00004) ONLINE; Check `zpool status -v tank` and `journalctl -k | grep ata3`. Light the tray with `/root/ugreen_leds_cli disk3` before touching it, and confirm which port changed after a reseat."
       # After the reseat the disk is back ONLINE and the alert resolves.
       - eval_time: 40m
         alertname: ZfsVdevNotOnline
