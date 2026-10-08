@@ -1159,13 +1159,15 @@ kube-prometheus-stack:
               # lookup says whether the rest of that mirror is still healthy,
               # which decides how urgent it is: mirror-3 pairs two bad-batch
               # drives. `for: 2m` lets a deliberate reseat finish without paging.
+              # The state is spelled out in the description, not just the summary:
+              # the Discord card shows only the description.
               expr: zfs_vdev_state{job="vm-node-exporter"} != 0
               for: 2m
               labels:
                 severity: critical
               annotations:
                 summary: "ZFS disk in bay {{ $labels.bay }} ({{ $labels.serial }}) is {{ if eq $value 1.0 }}DEGRADED{{ else if eq $value 2.0 }}FAULTED{{ else if eq $value 3.0 }}OFFLINE{{ else if eq $value 4.0 }}UNAVAIL{{ else if eq $value 5.0 }}REMOVED{{ else }}UNKNOWN{{ end }} in {{ $labels.pool }}/{{ $labels.vdev }}"
-                description: "Pool {{ $labels.pool }} {{ $labels.vdev }}: bay {{ $labels.bay }}, serial {{ $labels.serial }}, currently {{ $labels.device }}, state code {{ $value }}. Rest of {{ $labels.vdev }}:{{ range query (printf `zfs_vdev_state{job=\"vm-node-exporter\",pool=\"%s\",vdev=\"%s\",guid!=\"%s\"}` $labels.pool $labels.vdev $labels.guid) }} bay {{ .Labels.bay }} ({{ .Labels.serial }}) {{ if eq .Value 0.0 }}ONLINE{{ else }}NOT ONLINE, code {{ .Value }}{{ end }};{{ end }} Check `zpool status -v {{ $labels.pool }}` and `journalctl -k | grep ata{{ $labels.bay }}`. Light the tray with `/root/ugreen_leds_cli disk{{ $labels.bay }}` before touching it, and confirm which port changed after a reseat."
+                description: "Pool {{ $labels.pool }} {{ $labels.vdev }}: bay {{ $labels.bay }}, serial {{ $labels.serial }}, currently {{ $labels.device }}, is {{ if eq $value 1.0 }}DEGRADED{{ else if eq $value 2.0 }}FAULTED{{ else if eq $value 3.0 }}OFFLINE{{ else if eq $value 4.0 }}UNAVAIL{{ else if eq $value 5.0 }}REMOVED{{ else }}UNKNOWN{{ end }}. Rest of {{ $labels.vdev }}:{{ range query (printf `zfs_vdev_state{job=\"vm-node-exporter\",pool=\"%s\",vdev=\"%s\",guid!=\"%s\"}` $labels.pool $labels.vdev $labels.guid) }} bay {{ .Labels.bay }} ({{ .Labels.serial }}) {{ if eq .Value 0.0 }}ONLINE{{ else }}NOT ONLINE, code {{ .Value }}{{ end }};{{ end }} Check `zpool status -v {{ $labels.pool }}` and `journalctl -k | grep ata{{ $labels.bay }}`. Light the tray with `/root/ugreen_leds_cli disk{{ $labels.bay }}` before touching it, and confirm which port changed after a reseat."
             - alert: SmartDeviceHealthFailed
               expr: smart_device_health{job="vm-node-exporter"} == 0
               for: 5m
