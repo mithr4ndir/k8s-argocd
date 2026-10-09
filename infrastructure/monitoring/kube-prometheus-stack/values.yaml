@@ -1004,6 +1004,39 @@ kube-prometheus-stack:
                 summary: "The weekly outings digest has not been sent in over 8 days"
                 description: "CronJob automation/outings has had no successful run for {{ $value | humanizeDuration }}. Check `kubectl -n automation get jobs -l app.kubernetes.io/name=outings` and the last pod's logs (look for event=digest_failed)."
 
+    memory-sync-alerts:
+      groups:
+        # memory-sync.timer on command-center1 (ansible-quasarlab roles/cmd_center)
+        # commits agent memory to claude-config. Before it existed, write-back
+        # was manual and 68 memory changes sat on one disk for months, so the
+        # failure to catch is quiet: nothing breaks, memory just stops being
+        # backed up.
+        - name: memory-sync
+          rules:
+            - alert: MemorySyncStale
+              # Runs every 6h with up to 10m jitter; 14h means two runs missed.
+              # absent() catches the timer never having run (heartbeat file gone).
+              expr: |
+                time() - memory_sync_last_success_timestamp_seconds{job="vm-node-exporter"} > 14 * 3600
+                or
+                absent(memory_sync_last_run_timestamp_seconds{job="vm-node-exporter", instance="command-center1"})
+              for: 30m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Agent memory has not synced to claude-config for over 14h"
+                description: "memory-sync on {{ $labels.instance }} has not completed a sync in over 14 hours, so new agent memory exists only on that disk. Check `systemctl --user status memory-sync.timer memory-sync.service` and `journalctl --user -u memory-sync` as ladino."
+            - alert: MemorySyncBlocked
+              # The secret scan found something, or the scanner was unavailable.
+              # Deliberately its own alert: this is not a broken job, it is the
+              # job refusing to publish a possible credential.
+              expr: memory_sync_blocked{job="vm-node-exporter"} == 1
+              for: 5m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Memory sync refused to push: possible secret in agent memory"
+                description: "The gitleaks scan in memory-sync on {{ $labels.instance }} found something in claude-config/memory, or docker was unavailable, so nothing was pushed. Inspect without printing values: `docker run --rm -v ~/code/claude-config/memory:/scan:ro ghcr.io/gitleaks/gitleaks:v8.21.2 dir /scan --redact`. Remove the value from memory and assess rotation separately."
     agent-cmd-audit-alerts:
       groups:
         # Feed that posts every Bash command an AI agent runs on
