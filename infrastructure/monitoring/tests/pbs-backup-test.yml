@@ -1,0 +1,177 @@
+# promtool unit tests for the PBS backup alerts. Label sets mirror the live
+# series on 2026-10-15: job="vm-node-exporter", instance="pbs1",
+# datastore="lab", guest_type="vm".
+#
+# Every case asserts the rule FIRES on the failure it exists to catch, and the
+# healthy case asserts it stays quiet, because a rule that can never fire looks
+# identical to a correct one from the outside.
+rule_files:
+  - rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  # ---------------------------------------------------------------- job stale
+  - interval: 1m
+    name: the job stopping anywhere fires after 90m, and a healthy hourly job does not
+    input_series:
+      # Two guests backing up hourly, then both stop dead at t=0.
+      - series: 'pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1", datastore="lab", guest_type="vm", guest="100"}'
+        values: '0+0x400'
+      - series: 'pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1", datastore="lab", guest_type="vm", guest="105"}'
+        values: '0+0x400'
+      # The collector keeps running, so this is backups failing, not monitoring.
+      - series: 'pbs_backup_collector_timestamp_seconds{job="vm-node-exporter", instance="pbs1"}'
+        values: '0+60x400'
+    alert_rule_test:
+      - eval_time: 80m
+        alertname: PbsBackupJobStale
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: PbsBackupJobStale
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "No PBS backup has completed anywhere in over 90 minutes"
+              description: "The hourly PBS backup job has not produced a completed snapshot for any guest in over 90 minutes, so the lab is accumulating unbacked-up change. Check `systemctl status pbs-backup-collector` on pbs1, the job on a PVE node with `cat /etc/pve/jobs.cfg`, and the PBS task log at https://192.168.1.61:8007."
+
+  - interval: 1m
+    name: one guest failing does not trip the aggregate job alert
+    input_series:
+      # 100 is stuck, 105 keeps backing up. max() stays fresh, so the job is fine.
+      - series: 'pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1", datastore="lab", guest_type="vm", guest="100"}'
+        values: '0+0x400'
+      - series: 'pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1", datastore="lab", guest_type="vm", guest="105"}'
+        values: '0+60x400'
+      - series: 'pbs_backup_collector_timestamp_seconds{job="vm-node-exporter", instance="pbs1"}'
+        values: '0+60x400'
+    alert_rule_test:
+      - eval_time: 5h
+        alertname: PbsBackupJobStale
+        exp_alerts: []
+
+  - interval: 1m
+    name: metrics disappearing entirely fires the job alert
+    # The collector removed, or the textfile deleted. Without absent() the rule
+    # would silently evaluate to nothing, which is the failure mode these tests
+    # exist for.
+    input_series:
+      - series: 'up{job="vm-node-exporter", instance="pbs1"}'
+        values: '1+0x400'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: PbsBackupJobStale
+        exp_alerts:
+          # The absent() branch keeps the job label from its own matcher, while
+          # the max() branch above drops every label. Different label sets from
+          # one rule, which is worth knowing when routing or silencing it.
+          - exp_labels:
+              severity: critical
+              job: vm-node-exporter
+            exp_annotations:
+              summary: "No PBS backup has completed anywhere in over 90 minutes"
+              description: "The hourly PBS backup job has not produced a completed snapshot for any guest in over 90 minutes, so the lab is accumulating unbacked-up change. Check `systemctl status pbs-backup-collector` on pbs1, the job on a PVE node with `cat /etc/pve/jobs.cfg`, and the PBS task log at https://192.168.1.61:8007."
+
+  # -------------------------------------------------------------- guest stale
+  - interval: 1m
+    name: a single guest going stale for 26h warns, while excluded guests never do
+    input_series:
+      # 100 stops at t=0 while the rest of the fleet is fine.
+      - series: 'pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1", datastore="lab", guest_type="vm", guest="100"}'
+        values: '0+0x2000'
+      # 103 is pbs1 itself and 102 is a template: both in the vzdump exclude
+      # list, both permanently ancient, and neither may alert.
+      - series: 'pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1", datastore="lab", guest_type="vm", guest="103"}'
+        values: '0+0x2000'
+      - series: 'pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1", datastore="lab", guest_type="vm", guest="102"}'
+        values: '0+0x2000'
+      - series: 'pbs_backup_collector_timestamp_seconds{job="vm-node-exporter", instance="pbs1"}'
+        values: '0+60x2000'
+    alert_rule_test:
+      - eval_time: 20h
+        alertname: PbsGuestBackupStale
+        exp_alerts: []
+      - eval_time: 28h
+        alertname: PbsGuestBackupStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: pbs1
+              datastore: lab
+              guest_type: vm
+              guest: "100"
+            exp_annotations:
+              summary: "Guest 100 has had no completed backup for over 26h"
+              description: "vm/100 has no completed snapshot in datastore lab for over 26 hours while other guests are backing up normally, so this is one guest failing rather than the job being down. If the guest was deliberately removed from the job, add it to the exclusion in both /etc/pve/jobs.cfg and this rule."
+
+  # ------------------------------------------------------- restores nothing
+  - interval: 1m
+    name: a completed backup containing no disks is critical
+    input_series:
+      # Fresh and complete, so nothing else notices. Only the disk count does.
+      - series: 'pbs_snapshot_disk_index_count{job="vm-node-exporter", instance="pbs1", datastore="lab", guest_type="vm", guest="104"}'
+        values: '0+0x100'
+      - series: 'pbs_snapshot_disk_index_count{job="vm-node-exporter", instance="pbs1", datastore="lab", guest_type="vm", guest="105"}'
+        values: '2+0x100'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: PbsBackupRestoresNothing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: vm-node-exporter
+              instance: pbs1
+              datastore: lab
+              guest_type: vm
+              guest: "104"
+            exp_annotations:
+              summary: "Latest backup of 104 contains no disks"
+              description: "The newest completed snapshot for vm/104 has a manifest but zero disk indexes, so it reports success and restores nothing. Check the guest's disks are not excluded from backup (`qm config 104` and look for backup=0)."
+
+  # ------------------------------------------------------------ datastore full
+  - interval: 1m
+    name: the datastore crossing 80% warns, and 57% does not
+    input_series:
+      - series: 'node_filesystem_size_bytes{job="vm-node-exporter", instance="pbs1", mountpoint="/mnt/datastore/lab"}'
+        values: '1000+0x300'
+      # 57% used, which is where it actually sat on 2026-10-15, then 85%.
+      - series: 'node_filesystem_avail_bytes{job="vm-node-exporter", instance="pbs1", mountpoint="/mnt/datastore/lab"}'
+        values: '430+0x150 150+0x150'
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: PbsDatastoreFilling
+        exp_alerts: []
+      - eval_time: 4h
+        alertname: PbsDatastoreFilling
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: pbs1
+              mountpoint: /mnt/datastore/lab
+            exp_annotations:
+              summary: "PBS datastore /mnt/datastore/lab is over 80% full"
+              description: "/mnt/datastore/lab on pbs1 is over 80% used. A full datastore fails backups rather than pruning harder. Check the prune job and GC with `proxmox-backup-manager prune-job list` and `proxmox-backup-manager garbage-collection status <store>` on pbs1."
+
+  # --------------------------------------------------------- collector stale
+  - interval: 1m
+    name: the collector freezing is distinguished from backups stopping
+    input_series:
+      - series: 'pbs_backup_collector_timestamp_seconds{job="vm-node-exporter", instance="pbs1"}'
+        values: '0+0x300'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: PbsBackupCollectorStale
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: PbsBackupCollectorStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node-exporter
+              instance: pbs1
+            exp_annotations:
+              summary: "PBS backup collector has not run for over an hour"
+              description: "pbs-backup-collector.timer on pbs1 fires every 10 minutes and has not completed for over an hour, so backup freshness metrics are frozen and PbsBackupJobStale may be reporting the collector rather than the backups. Check `systemctl status pbs-backup-collector.timer pbs-backup-collector.service`."
