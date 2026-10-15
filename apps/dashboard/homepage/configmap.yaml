@@ -157,7 +157,11 @@ data:
             icon: nzbget.png
             href: http://192.168.1.226:6789
             description: Usenet downloader
-            siteMonitor: http://192.168.1.226:6789
+            # No siteMonitor: it always sends HEAD first, which NZBGet resets.
+            # The widget POSTs JSON-RPC instead. NZBGet has no API auth set.
+            widget:
+              type: nzbget
+              url: http://192.168.1.226:6789
         - qBittorrent:
             icon: qbittorrent.png
             href: http://192.168.1.226:8080
