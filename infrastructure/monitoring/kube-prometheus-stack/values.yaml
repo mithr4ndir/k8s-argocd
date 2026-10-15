@@ -1006,8 +1006,16 @@ kube-prometheus-stack:
 
     pbs-backup-alerts:
       groups:
-        # pbs1 (192.168.1.61) serves hourly backups for the whole lab, and
-        # pbs2 (192.168.1.62) pulls a copy of its datastore hourly at :30.
+        # pbs1 (192.168.1.61) serves the whole lab's backups and pbs2
+        # (192.168.1.62) pulls a copy of its datastore.
+        #
+        # EVERY THRESHOLD HERE IS SIZED AGAINST A ONCE-A-DAY BACKUP at 10:00
+        # UTC (ansible-quasarlab roles/pve/pbs_storage, 2026-10-15; UTC-pinned
+        # because the two PVE nodes disagree on local time, so a bare "03:00"
+        # would be two runs three hours apart). Backups were hourly until then
+        # and these numbers were 90m and 6h. If the cadence changes again,
+        # these change with it: a staleness threshold shorter than the backup
+        # interval does not alert on a problem, it alerts once a day forever.
         #
         # The rules about whether BACKUPS are happening are scoped to
         # instance="pbs1" on purpose. pbs2 runs the same collector over its own
@@ -1025,10 +1033,19 @@ kube-prometheus-stack:
         # backup leaves a directory behind.
         - name: pbs-backup
           rules:
-            # The primary signal. The job runs hourly over every included
+            # The primary signal. The job runs once a day over every included
             # guest, so if the NEWEST backup anywhere is old, the job itself
             # has stopped. Aggregated deliberately: it cannot false-positive on
             # the guests the job excludes, and it is the one that matters.
+            #
+            # 26h, measured rather than padded. max() over the guests is the
+            # LAST completion in the run, so this age resets at the end of the
+            # window, not the start. Hourly runs took 16m on pve and 11m on
+            # pve2 in parallel (pvesh task log, 2026-10-15), so a daily run
+            # carrying 24h of dirty blocks instead of 1h still closes well
+            # inside an hour and the normal peak is just under 24h. 26h leaves
+            # over two hours of headroom and still reports a missed run by
+            # 12:00 UTC the following day.
             #
             # Three arms, because the rule has three ways to be silently
             # wrong. max() over an EMPTY vector returns nothing, not zero, so
@@ -1042,7 +1059,7 @@ kube-prometheus-stack:
             # the other arms.
             - alert: PbsBackupJobStale
               expr: |
-                time() - max(pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"}) > 5400
+                time() - max(pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"}) > 26 * 3600
                 or
                 absent(pbs_backup_collector_timestamp_seconds{job="vm-node-exporter", instance="pbs1"})
                 or
@@ -1055,8 +1072,8 @@ kube-prometheus-stack:
               labels:
                 severity: critical
               annotations:
-                summary: "No PBS backup has completed anywhere in over 90 minutes"
-                description: "The hourly PBS backup job has not produced a completed snapshot for any guest in over 90 minutes, so the lab is accumulating unbacked-up change. Check `systemctl status pbs-backup-collector` on pbs1, the job on a PVE node with `cat /etc/pve/jobs.cfg`, and the PBS task log at https://192.168.1.61:8007."
+                summary: "No PBS backup has completed anywhere in over 26 hours"
+                description: "The daily PBS backup job (10:00 UTC) has not produced a completed snapshot for any guest in over 26 hours, so it has missed a whole run and the lab is accumulating unbacked-up change. Check `systemctl status pbs-backup-collector` on pbs1, the job on a PVE node with `cat /etc/pve/jobs.cfg`, and the PBS task log at https://192.168.1.61:8007."
 
             # One guest failing while the rest succeed. The aggregate above
             # cannot see this: max() stays fresh as long as anything backs up.
@@ -1081,9 +1098,18 @@ kube-prometheus-stack:
             # (ansible-quasarlab#217). Nothing had to be enumerated.
             #
             # The gate window must be much LONGER than the staleness
-            # threshold, or the alert would resolve itself: at 6h stale with a
-            # 7d window the alert keeps firing for about six and a half days
-            # after onset, which is long enough to be seen.
+            # threshold, or the alert would resolve itself: at 30h stale with a
+            # 7d window the alert keeps firing for about five and three quarter
+            # days after onset, which is long enough to be seen.
+            #
+            # 30h, which is deliberately LOOSER than the 26h aggregate above,
+            # so a whole job failure trips the job rule first and this one
+            # stays what it is for: one guest failing while the rest succeed.
+            # Per guest the normal peak is 24h plus wherever that guest sits in
+            # vzdump's queue, so 30h tolerates a run that takes hours longer
+            # than any observed one. The same 30h is used as the gate window
+            # below, so a guest that has only just become stale does not drop
+            # out of scope on the same evaluation.
             #
             # 15m resolution. 1h was tried first, on the reasoning that the
             # inner condition stays true for a full 6h once a backup lands so
@@ -1106,20 +1132,20 @@ kube-prometheus-stack:
             - alert: PbsGuestBackupStale
               expr: |
                 (
-                  time() - pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"} > 6 * 3600
+                  time() - pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"} > 30 * 3600
                 )
                 and on(datastore, guest_type, guest)
                 (
                   max_over_time(
-                    (pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"} > time() - 6 * 3600)[7d:15m]
+                    (pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"} > time() - 30 * 3600)[7d:15m]
                   ) > 0
                 )
               for: 30m
               labels:
                 severity: warning
               annotations:
-                summary: "Guest {{ $labels.guest }} has had no completed backup for over 6h"
-                description: "{{ $labels.guest_type }}/{{ $labels.guest }} has no completed snapshot in datastore {{ $labels.datastore }} for over 6 hours while other guests are backing up normally, so this is one guest failing rather than the job being down. It was backing up normally within the last 7 days, so it is in the job rather than deliberately excluded. Check the PBS task log at https://192.168.1.61:8007 for this group, and `qm config {{ $labels.guest }}` for a disk that lost its backup flag."
+                summary: "Guest {{ $labels.guest }} has had no completed backup for over 30h"
+                description: "{{ $labels.guest_type }}/{{ $labels.guest }} has no completed snapshot in datastore {{ $labels.datastore }} for over 30 hours, so it has missed a whole daily run, while other guests are backing up normally, so this is one guest failing rather than the job being down. It was backing up normally within the last 7 days, so it is in the job rather than deliberately excluded. Check the PBS task log at https://192.168.1.61:8007 for this group, and `qm config {{ $labels.guest }}` for a disk that lost its backup flag."
 
             # Attempts happened and every one of them failed. PBS writes
             # index.json.blob LAST, so a backup that dies partway leaves a
@@ -1156,28 +1182,51 @@ kube-prometheus-stack:
             # failure again. That is precisely the state the lab was in until
             # 2026-10-15, and nothing reported it.
             #
-            # The sync runs hourly at :30, so 3h is two missed runs. The
-            # absent() arm catches the replica that never syncs at all, which a
-            # lag comparison cannot see because one side of the subtraction is
-            # simply missing.
+            # 30h, and this is the one threshold here that daily backups make
+            # LOOSER than the sync cadence would suggest. pbs2 still pulls
+            # hourly at :30, so it normally trails pbs1 by well under an hour.
+            # The limit is not how often the replica tries, it is how often the
+            # primary produces something new to notice: once backups are daily,
+            # pbs1 gains a snapshot once a day, so after the sync dies the
+            # difference sits at whatever it was and only grows in 24h steps.
+            # A 3h threshold was correct when pbs1 produced a snapshot every
+            # hour. With daily backups it would alert every morning in the
+            # window between the backup landing and the next :30 pull, and
+            # still not detect a dead sync any sooner. 30h is as tight as this
+            # signal supports.
+            #
+            # Measured as a DIFFERENCE between the two stores rather than as
+            # pbs2's own age, so it stays quiet when pbs1 itself has stopped
+            # backing up: there pbs2 is correctly holding nothing newer and
+            # PbsBackupJobStale is the alert that should fire. It also means
+            # the rule does not have to be re-tuned when the sync schedule
+            # moves, which a threshold on pbs2's own age would.
+            #
+            # The faster detector for a sync that has died is
+            # PbsReplicaMissingGuest below, on the next guest to be created.
+            #
+            # The absent() arm catches the replica that never syncs at all,
+            # which a lag comparison cannot see because one side of the
+            # subtraction is simply missing.
             - alert: PbsReplicaLagging
               expr: |
                 max(pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"})
-                  - max(pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs2"}) > 10800
+                  - max(pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs2"}) > 30 * 3600
                 or
                 absent(pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs2"})
               for: 1h
               labels:
                 severity: critical
               annotations:
-                summary: "The pbs2 replica is more than 3h behind pbs1"
-                description: "pbs2 pulls pbs1's datastore hourly at :30 and has fallen more than three hours behind, or is reporting no snapshots at all. Every backup is effectively back on one host. Check the sync job on pbs2 with `proxmox-backup-manager sync-job list` and its last task log; an expired `sync@pbs!pbs2` token or a regenerated pbs1 certificate both break the pull while leaving pbs1 healthy."
+                summary: "The pbs2 replica is more than 30h behind pbs1"
+                description: "pbs2 pulls pbs1's datastore hourly at :30 and has fallen more than 30 hours behind, which is a whole missed daily backup rather than a slow pull, or is reporting no snapshots at all. Every backup is effectively back on one host. Check the sync job on pbs2 with `proxmox-backup-manager sync-job list` and its last task log; an expired `sync@pbs!pbs2` token or a regenerated pbs1 certificate both break the pull while leaving pbs1 healthy."
 
             # The aggregate above is satisfied by ONE group syncing, so a
             # single guest that never replicates hides behind the others. This
             # is the per-guest version: present on the primary, absent from the
-            # replica. Three hours is three sync cycles, which is slack enough
-            # for a newly created guest to land.
+            # replica. Three hours of `for:` is slack enough for a newly
+            # created guest to land: its first backup arrives with the daily
+            # run and the next hourly pull copies it within the hour.
             #
             # Scope comes from the same history gate as PbsGuestBackupStale,
             # for the same reason: the excluded guests' stale groups DO get
@@ -1190,7 +1239,7 @@ kube-prometheus-stack:
                   and on(datastore, guest_type, guest)
                   (
                     max_over_time(
-                      (pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"} > time() - 6 * 3600)[7d:15m]
+                      (pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"} > time() - 30 * 3600)[7d:15m]
                     ) > 0
                   )
                 )
@@ -1217,7 +1266,7 @@ kube-prometheus-stack:
               expr: |
                 pbs_snapshot_disk_index_count{job="vm-node-exporter", instance="pbs1"} == 0
                 and on(datastore, guest_type, guest)
-                (time() - pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"} < 6 * 3600)
+                (time() - pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"} < 30 * 3600)
               for: 15m
               labels:
                 severity: critical
