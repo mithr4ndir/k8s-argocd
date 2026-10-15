@@ -362,6 +362,8 @@ data:
             widget:
               type: authentik
               url: http://192.168.1.50:9000
+              # version 2 reads events/events/volume/; per_month was removed in authentik 2025.10.
+              version: 2
               key: "{{HOMEPAGE_VAR_AUTHENTIK_TOKEN}}"
         - ArgoCD:
             icon: argocd.png
