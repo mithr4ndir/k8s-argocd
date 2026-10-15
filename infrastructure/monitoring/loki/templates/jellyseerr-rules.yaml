@@ -1,0 +1,45 @@
+# LogQL alert rules for jellyseerr, loaded by the loki-sc-rules sidecar.
+# The sidecar only watches its own namespace (monitoring) for ConfigMaps
+# labelled loki_rule. auth_enabled is false, so every rule belongs to the
+# "fake" tenant and must land in /rules/fake for the ruler to load it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-rules-jellyseerr
+  namespace: monitoring
+  labels:
+    loki_rule: "1"
+  annotations:
+    k8s-sidecar-target-directory: /rules/fake
+data:
+  jellyseerr.yaml: |
+    groups:
+      - name: jellyseerr
+        rules:
+          - alert: JellyseerrJellyfinApiClientErrors
+            # Jellyseerr's Jellyfin scans run every 5 minutes as jellyseerr
+            # user 1, so a stale library id (June 2026) or a stale Jellyfin
+            # user id (October 2026, issue #211) shows up as about 12 errors
+            # per hour like the one below, while the UI keeps looking fine:
+            #   [Jellyfin API]: Something went wrong while getting library
+            #   content from the Jellyfin server: Request failed with status
+            #   code 404
+            # Any 4xx counts: a revoked API key (401) is the same silent
+            # failure. Both line filters are plain substring matches on one
+            # stream, so evaluation stays cheap.
+            expr: |
+              sum by (namespace) (
+                count_over_time({namespace="media", app="jellyseerr"} |= "[Jellyfin API]" |= "Request failed with status code 4" [1h])
+              ) > 2
+            for: 1h
+            labels:
+              severity: warning
+            annotations:
+              summary: Jellyseerr is getting 4xx errors from the Jellyfin API
+              description: >-
+                Jellyseerr has logged more than 2 Jellyfin API 4xx errors per
+                hour for over an hour, so its library scans are failing and
+                new media is not being marked available. Check that jellyseerr
+                user 1 is linked to a Jellyfin user id that exists, and that
+                the library ids in settings.json match Jellyfin. See
+                k8s-argocd issue #211.
