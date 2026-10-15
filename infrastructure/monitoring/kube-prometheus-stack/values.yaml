@@ -1006,7 +1006,17 @@ kube-prometheus-stack:
 
     pbs-backup-alerts:
       groups:
-        # pbs1 (192.168.1.61) serves hourly backups for the whole lab. Before
+        # pbs1 (192.168.1.61) serves hourly backups for the whole lab, and
+        # pbs2 (192.168.1.62) pulls a copy of its datastore hourly at :30.
+        #
+        # The rules about whether BACKUPS are happening are scoped to
+        # instance="pbs1" on purpose. pbs2 runs the same collector over its own
+        # datastore, and a synced snapshot keeps the source's timestamp, so
+        # without the scope every per-guest fault would alert twice for one
+        # cause. The replica gets its own rules below, which ask a different
+        # question: is the copy keeping up with the original.
+        #
+        # Before
         # these rules Prometheus had 295 alerts and not one mentioned backups,
         # so a silent failure would only have surfaced during a restore. Series
         # come from the pbs-backup-collector in ansible-quasarlab roles/pbs,
@@ -1021,9 +1031,9 @@ kube-prometheus-stack:
             # the guests the job excludes, and it is the one that matters.
             - alert: PbsBackupJobStale
               expr: |
-                time() - max(pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter"}) > 5400
+                time() - max(pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"}) > 5400
                 or
-                absent(pbs_backup_collector_timestamp_seconds{job="vm-node-exporter"})
+                absent(pbs_backup_collector_timestamp_seconds{job="vm-node-exporter", instance="pbs1"})
               for: 15m
               labels:
                 severity: critical
@@ -1044,13 +1054,53 @@ kube-prometheus-stack:
             # scope; tracked separately rather than bodged here.
             - alert: PbsGuestBackupStale
               expr: |
-                time() - pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", guest!~"102|103|120|9000|9001|9002"} > 26 * 3600
+                time() - pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1", guest!~"102|103|120|9000|9001|9002"} > 26 * 3600
               for: 30m
               labels:
                 severity: warning
               annotations:
                 summary: "Guest {{ $labels.guest }} has had no completed backup for over 26h"
                 description: "{{ $labels.guest_type }}/{{ $labels.guest }} has no completed snapshot in datastore {{ $labels.datastore }} for over 26 hours while other guests are backing up normally, so this is one guest failing rather than the job being down. If the guest was deliberately removed from the job, add it to the exclusion in both /etc/pve/jobs.cfg and this rule."
+
+            # Does the second copy still exist and is it current? Everything
+            # above would stay green with replication dead, because pbs1 alone
+            # looks perfectly healthy while quietly becoming a single point of
+            # failure again. That is precisely the state the lab was in until
+            # 2026-10-15, and nothing reported it.
+            #
+            # The sync runs hourly at :30, so 3h is two missed runs. The
+            # absent() arm catches the replica that never syncs at all, which a
+            # lag comparison cannot see because one side of the subtraction is
+            # simply missing.
+            - alert: PbsReplicaLagging
+              expr: |
+                max(pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"})
+                  - max(pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs2"}) > 10800
+                or
+                absent(pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs2"})
+              for: 1h
+              labels:
+                severity: critical
+              annotations:
+                summary: "The pbs2 replica is more than 3h behind pbs1"
+                description: "pbs2 pulls pbs1's datastore hourly at :30 and has fallen more than three hours behind, or is reporting no snapshots at all. Every backup is effectively back on one host. Check the sync job on pbs2 with `proxmox-backup-manager sync-job list` and its last task log; an expired `sync@pbs!pbs2` token or a regenerated pbs1 certificate both break the pull while leaving pbs1 healthy."
+
+            # The aggregate above is satisfied by ONE group syncing, so a
+            # single guest that never replicates hides behind the others. This
+            # is the per-guest version: present on the primary, absent from the
+            # replica. Three hours is three sync cycles, which is slack enough
+            # for a newly created guest to land.
+            - alert: PbsReplicaMissingGuest
+              expr: |
+                pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1", guest!~"102|103|120|9000|9001|9002"}
+                unless on(guest, guest_type)
+                pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs2"}
+              for: 3h
+              labels:
+                severity: warning
+              annotations:
+                summary: "Guest {{ $labels.guest }} exists on pbs1 but not on the replica"
+                description: "{{ $labels.guest_type }}/{{ $labels.guest }} has a completed backup on pbs1 and none on pbs2, so this guest has exactly one copy while the rest of the lab has two. Check the sync job's last task log on pbs2 for a per-group failure; a group whose owner differs on the two stores fails individually and the job still reports success."
 
             # The PBS form of the backup=0 trap. The snapshot completed, so it
             # is not stale and nothing else notices, but it contains no disk
