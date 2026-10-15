@@ -75,6 +75,22 @@ loki:
       retention_delete_worker_count: 150
       delete_request_store: filesystem
 
+    # The loki-sc-rules sidecar copies ConfigMaps labelled loki_rule into
+    # the /rules emptyDir, but until 2026-10-15 the ruler read
+    # /var/loki/rules (empty) and had no Alertmanager, so no LogQL rule
+    # could ever load or fire. Point local storage at the sidecar folder
+    # (rules for the single "fake" tenant go in /rules/fake) and move the
+    # ruler's scratch rule_path off /rules, which is its default, so it
+    # cannot clobber the sidecar's files.
+    structuredConfig:
+      ruler:
+        storage:
+          local:
+            directory: /rules
+        rule_path: /tmp/loki-ruler
+        alertmanager_url: http://kube-prometheus-stack-alertmanager.monitoring.svc:9093
+        enable_api: true
+
   singleBinary:
     replicas: 1
     # Working set over 2026-10-01..14: p50 418Mi, p99 478Mi, max 569Mi. The
