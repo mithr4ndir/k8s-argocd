@@ -1,7 +1,7 @@
 controllers:
   main:
     type: deployment
-    replicas: 1
+    replicas: 0
     pod:
       securityContext:
         fsGroup: 1000
