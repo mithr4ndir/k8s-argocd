@@ -1172,6 +1172,63 @@ kube-prometheus-stack:
         # failing disk was visible on a dashboard and paged nobody.
         - name: truenas-storage
           rules:
+            # Per-vdev latency. See ansible-quasarlab roles/truenas
+            # zfs-smart-textfile.sh for why these are histograms not gauges.
+            #
+            # WHY: on 2026-10-06 tank's mirror-2 ran roughly 50x the latency
+            # of its three sibling vdevs, 58ms read against 1ms, while every
+            # signal above stayed green: pool ONLINE, smart_device_health 1 on
+            # both members, zero reallocated, pending, uncorrectable and CRC,
+            # zero ata link resets. A vdev can be fifty times slower than its
+            # peers with nothing here to show for it.
+            #
+            # A recording rule, the first in this file, because the alert
+            # otherwise repeats a four-line histogram_quantile twice (once for
+            # the vdev, once for the pool median it is compared against) and
+            # nobody could read the difference between the two copies.
+            #
+            # max over read AND write: #218 found both elevated on mirror-2.
+            # The label_replace is what keeps them as separate series long
+            # enough for max() to pick the worse one; a bare `or` would return
+            # only the read side, because both carry identical (pool, vdev).
+            - record: zfs:vdev_total_wait_p99_seconds
+              expr: |
+                max by (pool, vdev) (
+                  label_replace(
+                    histogram_quantile(0.99, sum by (pool, vdev, le) (
+                      rate(zfs_vdev_total_wait_read_seconds_bucket{vdev=~"mirror-[0-9]+"}[1h]))),
+                    "op", "read", "", "")
+                  or
+                  label_replace(
+                    histogram_quantile(0.99, sum by (pool, vdev, le) (
+                      rate(zfs_vdev_total_wait_write_seconds_bucket{vdev=~"mirror-[0-9]+"}[1h]))),
+                    "op", "write", "", "")
+                )
+
+            # Compared against its SIBLINGS, not an absolute threshold. A
+            # pool's vdevs carry the same workload on the same controller, so
+            # the median of the others is the only honest baseline; an
+            # absolute number would need retuning for every disk generation
+            # and would say nothing about one vdev behaving unlike the rest.
+            #
+            # The 50ms floor stops it firing on a 5x ratio between two
+            # perfectly healthy vdevs, which is easy to hit when both are
+            # sub-millisecond. Only mirror-[0-9]+ is considered: leaf devices
+            # are exported too, and including them would alert twice for one
+            # fault, once for the disk and once for its mirror. The leaves are
+            # the drill-down, which is where the description points.
+            - alert: ZfsVdevLatencyOutlier
+              expr: |
+                (zfs:vdev_total_wait_p99_seconds > 0.05)
+                > on (pool) group_left()
+                (5 * quantile by (pool) (0.5, zfs:vdev_total_wait_p99_seconds))
+              for: 30m
+              labels:
+                severity: warning
+              annotations:
+                summary: "{{ $labels.vdev }} in {{ $labels.pool }} is far slower than its sibling vdevs"
+                description: "{{ $labels.vdev }} has a p99 I/O latency of {{ $value | humanizeDuration }}, more than five times the median of the other vdevs in {{ $labels.pool }}, sustained for 30 minutes. ZFS stripes across top-level vdevs, so the slowest one sets the pool's effective latency. Pool health and SMART can both be perfectly clean while this is true, which is exactly how it went unnoticed. Compare members with `zpool iostat -l -v {{ $labels.pool }} 10 2` on the NAS, and the per-leaf zfs_vdev_total_wait_read_seconds_bucket series to see whether one disk or both are affected."
+
             # Whole-pool state. NOT sufficient for the failure this lab
             # actually has: on 2026-10-08 the bay 3 drive was FAULTED for half
             # an hour while `zpool list` kept saying tank was ONLINE, so this
