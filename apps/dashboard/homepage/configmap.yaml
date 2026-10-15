@@ -157,7 +157,11 @@ data:
             icon: nzbget.png
             href: http://192.168.1.226:6789
             description: Usenet downloader
-            siteMonitor: http://192.168.1.226:6789
+            # No siteMonitor: it always sends HEAD first, which NZBGet resets.
+            # The widget POSTs JSON-RPC instead. NZBGet has no API auth set.
+            widget:
+              type: nzbget
+              url: http://192.168.1.226:6789
         - qBittorrent:
             icon: qbittorrent.png
             href: http://192.168.1.226:8080
@@ -358,6 +362,8 @@ data:
             widget:
               type: authentik
               url: http://192.168.1.50:9000
+              # version 2 reads events/events/volume/; per_month was removed in authentik 2025.10.
+              version: 2
               key: "{{HOMEPAGE_VAR_AUTHENTIK_TOKEN}}"
         - ArgoCD:
             icon: argocd.png
