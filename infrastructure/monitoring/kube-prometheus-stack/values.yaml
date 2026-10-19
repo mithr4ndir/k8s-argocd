@@ -15,6 +15,13 @@ kube-prometheus-stack:
             - targets:
               - '192.168.1.10:9221'
               - '192.168.1.11:9221'
+        # Host Vector on PVE counts the QEMU iSCSI GET_LBA_STATUS lines it drops
+        # before Loki (ansible-quasarlab #223), so the condition stays visible.
+        - job_name: 'pve-vector'
+          static_configs:
+            - targets:
+              - '192.168.1.10:9598'
+              - '192.168.1.11:9598'
         - job_name: 'vm-node-exporter'
           relabel_configs:
             - source_labels: [__address__]
@@ -1742,6 +1749,57 @@ kube-prometheus-stack:
               annotations:
                 summary: "{{ $labels.pod }} not ready for 10+ minutes"
                 description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been running but not ready for over 10 minutes. Readiness probes may be failing."
+    # Loki is a single binary: querier and ingester share one process, so a
+    # heavy query can stop ingestion, and every log pushed meanwhile is lost
+    # (Vector does not buffer it). On 2026-10-15 that went unnoticed (#237).
+    loki-alerts:
+      groups:
+        - name: loki-health
+          rules:
+            - alert: LokiNotReady
+              # From kube-state-metrics, so it still fires when Loki itself
+              # cannot be scraped. On 2026-10-15 loki-0 was not ready from
+              # 01:30 until it was deleted at 01:35; 3m catches that, and a
+              # normal restart is ready again in under a minute.
+              expr: |
+                kube_statefulset_status_replicas_ready{namespace="monitoring", statefulset="loki"}
+                <
+                kube_statefulset_replicas{namespace="monitoring", statefulset="loki"}
+              for: 3m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Loki is not ready, logs are not being ingested"
+                description: "{{ $value }} of the Loki StatefulSet replicas are ready. Loki's ingester runs in the same pod, so pushes from Vector are failing and those logs are being lost. Check `kubectl -n monitoring describe pod loki-0` and `kubectl -n monitoring top pod loki-0`; a runaway query pins memory at the limit."
+            - alert: LokiPushErrors
+              # Needs the Loki ServiceMonitor (loki values.yaml). status_code
+              # is the HTTP code; the 2026-10-15 failures were 500s.
+              expr: |
+                sum(rate(loki_request_duration_seconds_count{namespace="monitoring", route="loki_api_v1_push", status_code=~"5.."}[5m]))
+                /
+                sum(rate(loki_request_duration_seconds_count{namespace="monitoring", route="loki_api_v1_push"}[5m]))
+                > 0.05
+              for: 3m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Loki is rejecting {{ $value | humanizePercentage }} of log pushes"
+                description: "More than 5% of POST /loki/api/v1/push requests have returned 5xx for 3 minutes. Vector drops what it cannot push, so logs from this period are being lost. Check `kubectl -n monitoring logs loki-0 -c loki --since=10m | grep push` and whether loki-0 is at its memory limit."
+            - alert: LokiMemoryNearLimit
+              # The precursor: on 2026-10-15 working set reached the limit at
+              # 01:29 and stayed there. Normal working set is about 40% of a
+              # 1Gi limit, so this does not fire on ordinary load.
+              expr: |
+                max by (pod) (container_memory_working_set_bytes{namespace="monitoring", pod=~"loki-[0-9]+", container="loki"})
+                /
+                max by (pod) (kube_pod_container_resource_limits{namespace="monitoring", pod=~"loki-[0-9]+", container="loki", resource="memory"})
+                > 0.9
+              for: 3m
+              labels:
+                severity: warning
+              annotations:
+                summary: "{{ $labels.pod }} is at {{ $value | humanizePercentage }} of its memory limit"
+                description: "Loki's working set has been above 90% of its memory limit for 3 minutes. Usually a broad query; Loki stops ingesting if it stays there. Check running queries with `kubectl -n monitoring logs loki-0 -c loki --since=10m | grep 'metrics.go'` and narrow or cancel them."
 
   # Prometheus Operator
   prometheusOperator:

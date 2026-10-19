@@ -20,13 +20,52 @@ loki:
     storage:
       type: filesystem
 
+    # Query guard rails (#237). On 2026-10-15 one 24h regex metric query over
+    # {job="varlogs"} pinned this single process at its memory limit, the
+    # ingester in the same process stopped accepting pushes, and roughly
+    # 01:23 to 01:35 UTC of logs was lost. Byte figures below are Loki's own
+    # index-stats estimates, which are what the bytes limits are checked
+    # against: about 600MB/h and 14.5GB/day across all jobs, of which
+    # {job="varlogs"} is about 12.7GB/day.
     limits_config:
       retention_period: 720h
       ingestion_rate_mb: 10
       ingestion_burst_size_mb: 20
       max_query_series: 500
+      # Only applies to non-TSDB schema periods. Every period here is TSDB, so
+      # this does nothing; tsdb_max_query_parallelism is the one that counts.
       max_query_parallelism: 2
+      # Default 128. Caps how many split/shard sub-queries one query keeps in
+      # flight. The querier runs at most querier.max_concurrent (4) at once.
+      tsdb_max_query_parallelism: 8
+      # Default 5m. Grafana's data proxy gives up at 30s by default (not overridden here), so anything
+      # still running after a minute is only burning memory for nobody.
+      query_timeout: 60s
+      # Same as the default, pinned so it is not "tuned" upward: a smaller
+      # split means less data per sub-query and so less memory per worker.
+      # 15m of all jobs is about 150MB.
+      split_queries_by_interval: 15m
+      # Same as the default (30d1h), pinned so 30-day panels keep working
+      # against the 720h retention.
+      max_query_length: 721h
+      # Default 0 (off). Rejects a log-filter or metric query up front, from
+      # index stats, before any chunk is read. 10GB fits about 16h of every
+      # job, or 30 days of any selector under about 330MB/day, and rejects
+      # the 24h varlogs scan that took Loki down. A query without line
+      # filters that only returns logs is not subject to it.
+      max_query_bytes_read: 10GB
+      # Default 150GB. Per sub-query after splitting and sharding. A 15m
+      # split of every job is about 150MB, so this is a backstop for a
+      # sub-query that could not be split down.
+      max_querier_bytes_read: 1GB
       discover_service_name: []
+
+    # Default 4GB, above the container limit, so replaying a large WAL after
+    # a crash could OOM-kill Loki on every start. Past this ceiling Loki
+    # flushes to storage and keeps replaying instead.
+    ingester:
+      wal:
+        replay_memory_ceiling: 1GB
 
     compactor:
       working_directory: /var/loki/compactor
@@ -36,14 +75,38 @@ loki:
       retention_delete_worker_count: 150
       delete_request_store: filesystem
 
+    # The loki-sc-rules sidecar copies ConfigMaps labelled loki_rule into
+    # the /rules emptyDir, but until 2026-10-15 the ruler read
+    # /var/loki/rules (empty) and had no Alertmanager, so no LogQL rule
+    # could ever load or fire. Point local storage at the sidecar folder
+    # (rules for the single "fake" tenant go in /rules/fake) and move the
+    # ruler's scratch rule_path off /rules, which is its default, so it
+    # cannot clobber the sidecar's files.
+    structuredConfig:
+      ruler:
+        storage:
+          local:
+            directory: /rules
+        rule_path: /tmp/loki-ruler
+        alertmanager_url: http://kube-prometheus-stack-alertmanager.monitoring.svc:9093
+        enable_api: true
+
   singleBinary:
     replicas: 1
+    # Working set over 2026-10-01..14: p50 418Mi, p99 478Mi, max 569Mi. The
+    # request sits above p99 so the scheduler reserves what Loki really uses;
+    # the limit leaves about 1.4Gi above the busiest normal day for queries.
+    # GOMEMLIMIT makes the Go GC work hard before the cgroup limit is reached,
+    # instead of the process sitting at the limit as it did on 2026-10-15.
     resources:
       requests:
         cpu: 100m
-        memory: 256Mi
+        memory: 512Mi
       limits:
-        memory: 1Gi
+        memory: 2Gi
+    extraEnv:
+      - name: GOMEMLIMIT
+        value: 1700MiB
     persistence:
       enabled: true
       storageClass: k8s-nfs
@@ -73,6 +136,15 @@ loki:
     enabled: false
 
   monitoring:
+    # Lets Prometheus scrape Loki, so LokiPushErrors (kube-prometheus-stack
+    # values) has loki_request_duration_seconds to read. The release label is
+    # what the Prometheus serviceMonitorSelector matches on.
+    serviceMonitor:
+      enabled: true
+      labels:
+        release: kube-prometheus-stack
+      metricsInstance:
+        enabled: false
     selfMonitoring:
       enabled: false
     lokiCanary:
