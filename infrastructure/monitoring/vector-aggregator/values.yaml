@@ -19,6 +19,16 @@ vector:
         address: 0.0.0.0:5514
         mode: tcp
 
+      # pfSense (core.home.arpa) can only send syslog over UDP: the built-in
+      # syslogd has no TCP mode, and syslog-ng is one more package on the
+      # firewall. Same port, different protocol, exposed through a second
+      # LoadBalancer Service that shares 192.168.1.232 (see
+      # vector-aggregator-svc.yaml).
+      syslog_udp:
+        type: syslog
+        address: 0.0.0.0:5514
+        mode: udp
+
       vector_agents:
         type: vector
         address: 0.0.0.0:6000
@@ -28,6 +38,7 @@ vector:
         type: remap
         inputs:
           - syslog
+          - syslog_udp
         source: |
           .job = "varlogs"
           .host = to_string(.hostname) ?? to_string(.source_ip) ?? "unknown"
