@@ -5,6 +5,11 @@ metadata:
   namespace: monitoring
   labels:
     app: vector-aggregator-external
+  annotations:
+    # Lets the UDP Service below sit on the same address. Kubernetes refuses
+    # TCP and UDP ports in one LoadBalancer Service unless the implementation
+    # opts in, and two Services with a shared key is the path MetalLB documents.
+    metallb.io/allow-shared-ip: vector-aggregator
 spec:
   type: LoadBalancer
   loadBalancerIP: 192.168.1.232
@@ -17,6 +22,27 @@ spec:
       targetPort: 6000
       protocol: TCP
       name: vector
+  selector:
+    app.kubernetes.io/instance: vector-aggregator
+    app.kubernetes.io/name: vector
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vector-aggregator-external-udp
+  namespace: monitoring
+  labels:
+    app: vector-aggregator-external
+  annotations:
+    metallb.io/allow-shared-ip: vector-aggregator
+spec:
+  type: LoadBalancer
+  loadBalancerIP: 192.168.1.232
+  ports:
+    - port: 5514
+      targetPort: 5514
+      protocol: UDP
+      name: syslog-udp
   selector:
     app.kubernetes.io/instance: vector-aggregator
     app.kubernetes.io/name: vector

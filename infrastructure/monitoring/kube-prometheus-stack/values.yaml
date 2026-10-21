@@ -1011,6 +1011,322 @@ kube-prometheus-stack:
                 summary: "The weekly outings digest has not been sent in over 8 days"
                 description: "CronJob automation/outings has had no successful run for {{ $value | humanizeDuration }}. Check `kubectl -n automation get jobs -l app.kubernetes.io/name=outings` and the last pod's logs (look for event=digest_failed)."
 
+    pbs-backup-alerts:
+      groups:
+        # pbs1 (192.168.1.61) serves the whole lab's backups and pbs2
+        # (192.168.1.62) pulls a copy of its datastore.
+        #
+        # EVERY THRESHOLD HERE IS SIZED AGAINST A ONCE-A-DAY BACKUP at 10:00
+        # UTC (ansible-quasarlab roles/pve/pbs_storage, 2026-10-15; UTC-pinned
+        # because the two PVE nodes disagree on local time, so a bare "03:00"
+        # would be two runs three hours apart). Backups were hourly until then
+        # and these numbers were 90m and 6h. If the cadence changes again,
+        # these change with it: a staleness threshold shorter than the backup
+        # interval does not alert on a problem, it alerts once a day forever.
+        #
+        # The rules about whether BACKUPS are happening are scoped to
+        # instance="pbs1" on purpose. pbs2 runs the same collector over its own
+        # datastore, and a synced snapshot keeps the source's timestamp, so
+        # without the scope every per-guest fault would alert twice for one
+        # cause. The replica gets its own rules below, which ask a different
+        # question: is the copy keeping up with the original.
+        #
+        # Before
+        # these rules Prometheus had 295 alerts and not one mentioned backups,
+        # so a silent failure would only have surfaced during a restore. Series
+        # come from the pbs-backup-collector in ansible-quasarlab roles/pbs,
+        # which reads the datastore on disk and only counts a snapshot that has
+        # a manifest, because PBS writes the manifest last and an aborted
+        # backup leaves a directory behind.
+        - name: pbs-backup
+          rules:
+            # The primary signal. The job runs once a day over every included
+            # guest, so if the NEWEST backup anywhere is old, the job itself
+            # has stopped. Aggregated deliberately: it cannot false-positive on
+            # the guests the job excludes, and it is the one that matters.
+            #
+            # 26h, measured rather than padded. max() over the guests is the
+            # LAST completion in the run, so this age resets at the end of the
+            # window, not the start. Hourly runs took 16m on pve and 11m on
+            # pve2 in parallel (pvesh task log, 2026-10-15), so a daily run
+            # carrying 24h of dirty blocks instead of 1h still closes well
+            # inside an hour and the normal peak is just under 24h. 26h leaves
+            # over two hours of headroom and still reports a missed run by
+            # 12:00 UTC the following day.
+            #
+            # Three arms, because the rule has three ways to be silently
+            # wrong. max() over an EMPTY vector returns nothing, not zero, so
+            # the first arm alone goes quiet exactly when the datastore holds
+            # no restorable backup at all. The second catches the collector or
+            # its textfile disappearing. The third is the gap between them:
+            # the collector running fine and reporting not one complete
+            # snapshot for any guest, where the heartbeat is present so
+            # absent() is false and max() is empty so the threshold is never
+            # evaluated. count() reduces it to a labelless series to match
+            # the other arms.
+            - alert: PbsBackupJobStale
+              expr: |
+                time() - max(pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"}) > 26 * 3600
+                or
+                absent(pbs_backup_collector_timestamp_seconds{job="vm-node-exporter", instance="pbs1"})
+                or
+                count(
+                  pbs_backup_collector_timestamp_seconds{job="vm-node-exporter", instance="pbs1"}
+                  unless on(instance)
+                  pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"}
+                ) > 0
+              for: 15m
+              labels:
+                severity: critical
+              annotations:
+                summary: "No PBS backup has completed anywhere in over 26 hours"
+                description: "The daily PBS backup job (10:00 UTC) has not produced a completed snapshot for any guest in over 26 hours, so it has missed a whole run and the lab is accumulating unbacked-up change. Check `systemctl status pbs-backup-collector` on pbs1, the job on a PVE node with `cat /etc/pve/jobs.cfg`, and the PBS task log at https://192.168.1.61:8007."
+
+            # One guest failing while the rest succeed. The aggregate above
+            # cannot see this: max() stays fresh as long as anything backs up.
+            #
+            # WHICH GUESTS ARE IN SCOPE is decided by the metric's own
+            # history, not by a list. The vzdump job excludes 102, 103, 120,
+            # 9000, 9001 and 9002 (templates, and the two backup servers,
+            # which cannot usefully back up to their own datastore), and their
+            # last snapshots keep ageing forever, so a bare threshold would
+            # alert on them permanently. Mirroring `exclude` from
+            # /etc/pve/jobs.cfg into a `guest!~` matcher was the obvious fix
+            # and the wrong one: the list then lives in two places and drifts
+            # silently, which is how node_exporter's systemd unit-include
+            # allowlist hid three real outages here.
+            #
+            # So the second arm asks instead: was this guest backed up
+            # recently at ANY point in the last 7 days? A guest in the job
+            # answers yes; a permanently excluded guest answers no and is
+            # never considered. Verified against live Prometheus on
+            # 2026-10-15: the gate selects exactly 18 guests, which is exactly
+            # the `included_volumes` set the vzdump job reports
+            # (ansible-quasarlab#217). Nothing had to be enumerated.
+            #
+            # The gate window must be much LONGER than the staleness
+            # threshold, or the alert would resolve itself: at 30h stale with a
+            # 7d window the alert keeps firing for about five and three quarter
+            # days after onset, which is long enough to be seen.
+            #
+            # 30h, which is deliberately LOOSER than the 26h aggregate above,
+            # so a whole job failure trips the job rule first and this one
+            # stays what it is for: one guest failing while the rest succeed.
+            # Per guest the normal peak is 24h plus wherever that guest sits in
+            # vzdump's queue, so 30h tolerates a run that takes hours longer
+            # than any observed one. The same 30h is used as the gate window
+            # below, so a guest that has only just become stale does not drop
+            # out of scope on the same evaluation.
+            #
+            # 15m resolution. 1h was tried first, on the reasoning that the
+            # inner condition stays true for a full 6h once a backup lands so
+            # an hourly grid cannot step over it, and 168 points is cheaper
+            # than 672. It was WRONG, and only evaluating it against live
+            # Prometheus showed why: subquery steps are aligned to the epoch,
+            # not to the evaluation time, so the newest 1h-aligned step can be
+            # most of an hour in the past. Against a series 20 minutes old
+            # every step landed before the series existed, the gate returned
+            # no series at all, and the whole rule was silently unable to
+            # fire. The promtool tests passed throughout, because a fixture
+            # hands the rule seven days of history that real Prometheus does
+            # not have yet. A coarse grid over a young series is the ordinary
+            # way a subquery quietly returns nothing.
+            #
+            # So the grid has to stay close to the scrape interval, not to the
+            # width of the condition. 15m bounds the blind window after a
+            # fresh deploy to one step, and 672 points over 18 series is
+            # roughly 12k samples per evaluation, which is cheap.
+            - alert: PbsGuestBackupStale
+              expr: |
+                (
+                  time() - pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"} > 30 * 3600
+                )
+                and on(datastore, guest_type, guest)
+                (
+                  max_over_time(
+                    (pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"} > time() - 30 * 3600)[7d:15m]
+                  ) > 0
+                )
+              for: 30m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Guest {{ $labels.guest }} has had no completed backup for over 30h"
+                description: "{{ $labels.guest_type }}/{{ $labels.guest }} has no completed snapshot in datastore {{ $labels.datastore }} for over 30 hours, so it has missed a whole daily run, while other guests are backing up normally, so this is one guest failing rather than the job being down. It was backing up normally within the last 7 days, so it is in the job rather than deliberately excluded. Check the PBS task log at https://192.168.1.61:8007 for this group, and `qm config {{ $labels.guest }}` for a disk that lost its backup flag."
+
+            # Attempts happened and every one of them failed. PBS writes
+            # index.json.blob LAST, so a backup that dies partway leaves a
+            # snapshot directory with no manifest; a guest with directories
+            # and no manifest anywhere has never once produced a restorable
+            # backup. PbsGuestBackupStale cannot catch this, because its gate
+            # asks when the guest was last FRESH and the answer is never.
+            #
+            # Deliberately keyed on dir_count > 0 rather than on the
+            # guests_without_complete gauge. pbs1 itself (vm103) sits in the
+            # datastore with an owner file, zero snapshot directories and no
+            # backup, because the job excludes it and a backup that fails
+            # before PBS creates a directory leaves nothing else behind. It is
+            # visible as dir_count 0 and is deliberately not alertable: an
+            # alert on "registered but never completed" would be permanently
+            # red on this lab, and a permanently firing alert is worse than
+            # none. Verified on live labels 2026-10-15: relaxing this to >= 0
+            # returns exactly vm103 and nothing else.
+            - alert: PbsGuestBackupsAllFailing
+              expr: |
+                pbs_guest_snapshot_dir_count{job="vm-node-exporter", instance="pbs1"} > 0
+                unless on(datastore, guest_type, guest)
+                pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"}
+              for: 30m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Every backup attempt for {{ $labels.guest }} has failed"
+                description: "{{ $labels.guest_type }}/{{ $labels.guest }} has {{ $value }} snapshot directories in datastore {{ $labels.datastore }} and not one of them carries a manifest, so every attempt died partway and the guest has no restorable backup at all. Read the failing task at https://192.168.1.61:8007; a guest that was only just added to the job has never been protected, not merely fallen behind."
+
+            # Does the second copy still exist and is it current? Everything
+            # above would stay green with replication dead, because pbs1 alone
+            # looks perfectly healthy while quietly becoming a single point of
+            # failure again. That is precisely the state the lab was in until
+            # 2026-10-15, and nothing reported it.
+            #
+            # 30h, and this is the one threshold here that daily backups make
+            # LOOSER than the sync cadence would suggest. pbs2 still pulls
+            # hourly at :30, so it normally trails pbs1 by well under an hour.
+            # The limit is not how often the replica tries, it is how often the
+            # primary produces something new to notice: once backups are daily,
+            # pbs1 gains a snapshot once a day, so after the sync dies the
+            # difference sits at whatever it was and only grows in 24h steps.
+            # A 3h threshold was correct when pbs1 produced a snapshot every
+            # hour. With daily backups it would alert every morning in the
+            # window between the backup landing and the next :30 pull, and
+            # still not detect a dead sync any sooner. 30h is as tight as this
+            # signal supports.
+            #
+            # Measured as a DIFFERENCE between the two stores rather than as
+            # pbs2's own age, so it stays quiet when pbs1 itself has stopped
+            # backing up: there pbs2 is correctly holding nothing newer and
+            # PbsBackupJobStale is the alert that should fire. It also means
+            # the rule does not have to be re-tuned when the sync schedule
+            # moves, which a threshold on pbs2's own age would.
+            #
+            # The faster detector for a sync that has died is
+            # PbsReplicaMissingGuest below, on the next guest to be created.
+            #
+            # The absent() arm catches the replica that never syncs at all,
+            # which a lag comparison cannot see because one side of the
+            # subtraction is simply missing.
+            - alert: PbsReplicaLagging
+              expr: |
+                max(pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"})
+                  - max(pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs2"}) > 30 * 3600
+                or
+                absent(pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs2"})
+              for: 1h
+              labels:
+                severity: critical
+              annotations:
+                summary: "The pbs2 replica is more than 30h behind pbs1"
+                description: "pbs2 pulls pbs1's datastore hourly at :30 and has fallen more than 30 hours behind, which is a whole missed daily backup rather than a slow pull, or is reporting no snapshots at all. Every backup is effectively back on one host. Check the sync job on pbs2 with `proxmox-backup-manager sync-job list` and its last task log; an expired `sync@pbs!pbs2` token or a regenerated pbs1 certificate both break the pull while leaving pbs1 healthy."
+
+            # The aggregate above is satisfied by ONE group syncing, so a
+            # single guest that never replicates hides behind the others. This
+            # is the per-guest version: present on the primary, absent from the
+            # replica. Three hours of `for:` is slack enough for a newly
+            # created guest to land: its first backup arrives with the daily
+            # run and the next hourly pull copies it within the hour.
+            #
+            # Scope comes from the same history gate as PbsGuestBackupStale,
+            # for the same reason: the excluded guests' stale groups DO get
+            # synced, but a list of them here would drift against
+            # /etc/pve/jobs.cfg.
+            - alert: PbsReplicaMissingGuest
+              expr: |
+                (
+                  pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"}
+                  and on(datastore, guest_type, guest)
+                  (
+                    max_over_time(
+                      (pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"} > time() - 30 * 3600)[7d:15m]
+                    ) > 0
+                  )
+                )
+                unless on(guest, guest_type)
+                pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs2"}
+              for: 3h
+              labels:
+                severity: warning
+              annotations:
+                summary: "Guest {{ $labels.guest }} exists on pbs1 but not on the replica"
+                description: "{{ $labels.guest_type }}/{{ $labels.guest }} has a completed backup on pbs1 and none on pbs2, so this guest has exactly one copy while the rest of the lab has two. Check the sync job's last task log on pbs2 for a per-group failure; a group whose owner differs on the two stores fails individually and the job still reports success."
+
+            # The PBS form of the backup=0 trap. The snapshot completed, so it
+            # is not stale and nothing else notices, but it contains no disk
+            # index and would restore nothing. A vzdump job hid exactly this
+            # shape in this lab before (ansible-quasarlab#173).
+            #
+            # Gated on the guest being CURRENT. A permanently excluded guest
+            # keeps its last snapshot forever, so if one of those ever held
+            # zero disk indexes an ungated rule would be red for good. For a
+            # guest that is actually in the job, "fresh and holds no disks" is
+            # the whole point of the alert.
+            - alert: PbsBackupRestoresNothing
+              expr: |
+                pbs_snapshot_disk_index_count{job="vm-node-exporter", instance="pbs1"} == 0
+                and on(datastore, guest_type, guest)
+                (time() - pbs_snapshot_last_complete_timestamp_seconds{job="vm-node-exporter", instance="pbs1"} < 30 * 3600)
+              for: 15m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Latest backup of {{ $labels.guest }} contains no disks"
+                description: "The newest completed snapshot for {{ $labels.guest_type }}/{{ $labels.guest }} has a manifest but zero disk indexes, so it reports success and restores nothing. Check the guest's disks are not excluded from backup (`qm config {{ $labels.guest }}` and look for backup=0)."
+
+            # Capacity. Retention is 24 hourly / 7 daily / 4 weekly / 3 monthly
+            # with GC at 03:30, so usage climbs while the window fills and
+            # should then flatten. It went 25% to 57% over the eight days after
+            # the store was built, which is the fill, but nothing was watching
+            # whether it flattens.
+            - alert: PbsDatastoreFilling
+              expr: |
+                100 * (1 - node_filesystem_avail_bytes{job="vm-node-exporter", mountpoint=~"/mnt/datastore/.*"}
+                          / node_filesystem_size_bytes{job="vm-node-exporter", mountpoint=~"/mnt/datastore/.*"}) > 80
+              for: 1h
+              labels:
+                severity: warning
+              annotations:
+                summary: "PBS datastore {{ $labels.mountpoint }} is over 80% full"
+                description: "{{ $labels.mountpoint }} on {{ $labels.instance }} is over 80% used. A full datastore fails backups rather than pruning harder. Check the prune job and GC with `proxmox-backup-manager prune-job list` and `proxmox-backup-manager garbage-collection status <store>` on pbs1."
+
+            # Distinguishes "backups stopped" from "we stopped being able to
+            # see them". PbsBackupJobStale fires either way, because a dead
+            # collector freezes the timestamps, so this is the one that says
+            # which. Not critical: backups may well still be running.
+            #
+            # The second arm is the case where the heartbeat DISAPPEARS rather
+            # than freezing: the textfile deleted, the collector uninstalled,
+            # or node_exporter losing the directory. A bare threshold returns
+            # no vector then, so the rule whose whole job is to separate
+            # "backups stopped" from "we stopped being able to see them" would
+            # itself go quiet. Expressed as "the exporter is up and yet
+            # exports no heartbeat", so it does not double up on NodeDown, and
+            # per instance so pbs2 is covered too without naming a metric
+            # twice.
+            - alert: PbsBackupCollectorStale
+              expr: |
+                time() - pbs_backup_collector_timestamp_seconds{job="vm-node-exporter"} > 3600
+                or
+                (
+                  up{job="vm-node-exporter", instance=~"pbs.*"} == 1
+                  unless on(instance)
+                  pbs_backup_collector_timestamp_seconds{job="vm-node-exporter"}
+                )
+              for: 15m
+              labels:
+                severity: warning
+              annotations:
+                summary: "PBS backup collector has not run for over an hour"
+                description: "pbs-backup-collector.timer on {{ $labels.instance }} fires every 10 minutes and has not completed for over an hour, so backup freshness metrics are frozen and PbsBackupJobStale may be reporting the collector rather than the backups. Check `systemctl status pbs-backup-collector.timer pbs-backup-collector.service`."
+
     memory-sync-alerts:
       groups:
         # memory-sync.timer on command-center1 (ansible-quasarlab roles/cmd_center)
