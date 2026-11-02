@@ -31,7 +31,12 @@ loki:
       retention_period: 720h
       ingestion_rate_mb: 10
       ingestion_burst_size_mb: 20
-      max_query_series: 500
+      # 5000, not the 500 default: the pfSense firewall log has about 1000 distinct
+      # blocked source IPs and 1000 distinct destination ports per hour, and the
+      # top-N panels on the pfSense Firewall Logs dashboard aggregate by those.
+      # Series are one sample each for instant queries, so memory cost is small;
+      # the real OOM risk (k8s-argocd#237) is bytes scanned, which this does not change.
+      max_query_series: 5000
       # Only applies to non-TSDB schema periods. Every period here is TSDB, so
       # this does nothing; tsdb_max_query_parallelism is the one that counts.
       max_query_parallelism: 2
