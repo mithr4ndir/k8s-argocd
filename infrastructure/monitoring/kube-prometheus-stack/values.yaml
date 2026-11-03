@@ -1514,17 +1514,46 @@ kube-prometheus-stack:
             # The label_replace is what keeps them as separate series long
             # enough for max() to pick the worse one; a bare `or` would return
             # only the read side, because both carry identical (pool, vdev).
+            #
+            # Each arm is gated on at least 1 operation per second, because a
+            # p99 over a trickle is not a percentile. Measured on tank over
+            # 2026-11-03: the mirrors serve 52 to 75 WRITE ops/s, so the write
+            # arm rests on 190k to 270k observations an hour, but only 0.17 to
+            # 0.47 READ ops/s, roughly 600 to 1700 an hour. At that rate the
+            # read p99 is the single slowest read in the window, and because
+            # the window is 1h it stays pinned there for a full hour, which
+            # satisfies `for: 30m` on its own. One slow read could hold this
+            # alert up indefinitely, and did: it fired continuously through
+            # 2026-11-02 while every well-sampled signal was clean.
+            #
+            # 1/s is deliberately far below the write rate and far above the
+            # read rate, so it drops the arm that cannot support a percentile
+            # without weakening the one that can. It is a floor on evidence,
+            # not on severity: a pool that genuinely starts serving reads
+            # crosses it and the read arm comes back.
+            #
+            # The rate is read off the le="+Inf" bucket rather than the
+            # _seconds_count series. They carry the same value, verified
+            # against tank on 2026-11-03, but +Inf is part of the histogram
+            # histogram_quantile already consumes, so the gate cannot end up
+            # evaluating a series the quantile does not have.
             - record: zfs:vdev_total_wait_p99_seconds
               expr: |
                 max by (pool, vdev) (
                   label_replace(
                     histogram_quantile(0.99, sum by (pool, vdev, le) (
-                      rate(zfs_vdev_total_wait_read_seconds_bucket{vdev=~"mirror-[0-9]+"}[1h]))),
+                      rate(zfs_vdev_total_wait_read_seconds_bucket{vdev=~"mirror-[0-9]+"}[1h])))
+                    and on (pool, vdev)
+                    (sum by (pool, vdev) (
+                      rate(zfs_vdev_total_wait_read_seconds_bucket{vdev=~"mirror-[0-9]+", le="+Inf"}[1h])) >= 1),
                     "op", "read", "", "")
                   or
                   label_replace(
                     histogram_quantile(0.99, sum by (pool, vdev, le) (
-                      rate(zfs_vdev_total_wait_write_seconds_bucket{vdev=~"mirror-[0-9]+"}[1h]))),
+                      rate(zfs_vdev_total_wait_write_seconds_bucket{vdev=~"mirror-[0-9]+"}[1h])))
+                    and on (pool, vdev)
+                    (sum by (pool, vdev) (
+                      rate(zfs_vdev_total_wait_write_seconds_bucket{vdev=~"mirror-[0-9]+", le="+Inf"}[1h])) >= 1),
                     "op", "write", "", "")
                 )
 
@@ -1550,7 +1579,7 @@ kube-prometheus-stack:
                 severity: warning
               annotations:
                 summary: "{{ $labels.vdev }} in {{ $labels.pool }} is far slower than its sibling vdevs"
-                description: "{{ $labels.vdev }} has a p99 I/O latency of {{ $value | humanizeDuration }}, more than five times the median of the other vdevs in {{ $labels.pool }}, sustained for 30 minutes. ZFS stripes across top-level vdevs, so the slowest one sets the pool's effective latency. Pool health and SMART can both be perfectly clean while this is true, which is exactly how it went unnoticed. Compare members with `zpool iostat -l -v {{ $labels.pool }} 10 2` on the NAS, and the per-leaf zfs_vdev_total_wait_read_seconds_bucket series to see whether one disk or both are affected."
+                description: "{{ $labels.vdev }} has a p99 I/O latency of {{ $value | humanizeDuration }}, more than five times the median of the other vdevs in {{ $labels.pool }}, sustained for 30 minutes. ZFS stripes across top-level vdevs, so the slowest one sets the pool's effective latency. Pool health and SMART can both be perfectly clean while this is true, which is exactly how it went unnoticed, and a clean SMART report is not a reason to close this. Compare members with `zpool iostat -l -v {{ $labels.pool }} 10 2` on the NAS, and the per-leaf zfs_vdev_disk_wait_write_seconds_bucket series to see whether one disk or both are affected. Prefer the share of operations past a fixed boundary over the p99 itself when judging how bad it is, because the exporter downsamples ZFS's 37 latency buckets to 11 and histogram_quantile interpolates inside the wide ones: `sum(rate(zfs_vdev_disk_wait_write_seconds_bucket{pool=\"{{ $labels.pool }}\", le=\"0.1\"}[1h])) by (vdev) / sum(rate(zfs_vdev_disk_wait_write_seconds_count{pool=\"{{ $labels.pool }}\"}[1h])) by (vdev)`. If both members of one mirror are slow while their siblings are not, check the drive lot and firmware before the media: tank's mirror-2 is the only pair of Inland IB24AJ drives on VE1R9004 and runs 20x its siblings with spotless SMART."
 
             # Whole-pool state. NOT sufficient for the failure this lab
             # actually has: on 2026-10-08 the bay 3 drive was FAULTED for half
