@@ -501,7 +501,7 @@ tests:
               vdev: mirror-2
             exp_annotations:
               summary: "mirror-2 in tank is far slower than its sibling vdevs"
-              description: "mirror-2 has a p99 I/O latency of 995ms, more than five times the median of the other vdevs in tank, sustained for 30 minutes. ZFS stripes across top-level vdevs, so the slowest one sets the pool's effective latency. Pool health and SMART can both be perfectly clean while this is true, which is exactly how it went unnoticed. Compare members with `zpool iostat -l -v tank 10 2` on the NAS, and the per-leaf zfs_vdev_total_wait_read_seconds_bucket series to see whether one disk or both are affected."
+              description: "mirror-2 has a p99 I/O latency of 995ms, more than five times the median of the other vdevs in tank, sustained for 30 minutes. ZFS stripes across top-level vdevs, so the slowest one sets the pool's effective latency. Pool health and SMART can both be perfectly clean while this is true, which is exactly how it went unnoticed, and a clean SMART report is not a reason to close this. Compare members with `zpool iostat -l -v tank 10 2` on the NAS, and the per-leaf zfs_vdev_disk_wait_write_seconds_bucket series to see whether one disk or both are affected. Prefer the share of operations past a fixed boundary over the p99 itself when judging how bad it is, because the exporter downsamples ZFS's 37 latency buckets to 11 and histogram_quantile interpolates inside the wide ones: `sum(rate(zfs_vdev_disk_wait_write_seconds_bucket{pool=\"tank\", le=\"0.1\"}[1h])) by (vdev) / sum(rate(zfs_vdev_disk_wait_write_seconds_count{pool=\"tank\"}[1h])) by (vdev)`. If both members of one mirror are slow while their siblings are not, check the drive lot and firmware before the media: tank's mirror-2 is the only pair of Inland IB24AJ drives on VE1R9004 and runs 20x its siblings with spotless SMART."
 
   - interval: 1m
     name: four vdevs behaving alike stay quiet
@@ -791,3 +791,215 @@ tests:
         alertname: ZfsVdevLatencyOutlier
         exp_alerts: []
 
+
+  - interval: 1m
+    name: a trickle of slow reads does NOT fire, because a p99 over 0.2 ops/s is one read
+    # tank serves 0.17 to 0.47 read ops/s per mirror. At 12 reads a minute the
+    # 99th percentile IS the single slowest read in the window, and the 1h
+    # window then holds it for an hour, satisfying `for: 30m` by itself. Before
+    # the >= 1/s gate this fixture fired continuously, which is what kept
+    # ZfsVdevLatencyOutlier lit through 2026-11-02 with every well-sampled
+    # signal clean. mirror-2's reads here are all slower than 1s, the most
+    # extreme shape available, so this cannot pass by being marginal.
+    input_series:
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.0001"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.0005"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.001"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.005"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.01"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.05"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.1"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.5"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="1"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="5"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="+Inf"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.0001"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.0005"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.001"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.005"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.01"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.05"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.1"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.5"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="1"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="5"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="+Inf"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.0001"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.0005"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.001"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.005"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.01"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.05"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.1"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.5"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="1"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="5"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="+Inf"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.0001"}'
+        values: '0+0x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.0005"}'
+        values: '0+0x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.001"}'
+        values: '0+0x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.005"}'
+        values: '0+0x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.01"}'
+        values: '0+0x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.05"}'
+        values: '0+0x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.1"}'
+        values: '0+0x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.5"}'
+        values: '0+0x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="1"}'
+        values: '0+0x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="5"}'
+        values: '0+12x160'
+      - series: 'zfs_vdev_total_wait_read_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="+Inf"}'
+        values: '0+12x160'
+    alert_rule_test:
+      - eval_time: 3h
+        alertname: ZfsVdevLatencyOutlier
+        exp_alerts: []
+
+  - interval: 1m
+    name: the write arm alone still fires, which is the 2026-11-03 mirror-2 case
+    # Writes run 52 to 75 ops/s per mirror on tank, so the write arm carries
+    # 190k to 270k observations an hour and the gate never touches it. This is
+    # the real post-trim state: mirror-2 (both Inland IB24AJ, firmware
+    # VE1R9004) at a 0.33s write p99 against 0.01s on its three siblings, with
+    # SMART spotless on every member. No read series at all, so the alert has
+    # to stand on writes.
+    input_series:
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.0001"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.0005"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.001"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.005"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.01"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.05"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.1"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.5"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="1"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="5"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="+Inf"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.0001"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.0005"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.001"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.005"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.01"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.05"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.1"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.5"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="1"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="5"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="+Inf"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.0001"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.0005"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.001"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.005"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.01"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.05"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.1"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.5"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="1"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="5"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="+Inf"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.0001"}'
+        values: '0+0x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.0005"}'
+        values: '0+0x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.001"}'
+        values: '0+0x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.005"}'
+        values: '0+0x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.01"}'
+        values: '0+0x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.05"}'
+        values: '0+0x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.1"}'
+        values: '0+0x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.5"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="1"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="5"}'
+        values: '0+3000x160'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="+Inf"}'
+        values: '0+3000x160'
+    alert_rule_test:
+      - eval_time: 3h
+        alertname: ZfsVdevLatencyOutlier
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              pool: tank
+              vdev: mirror-2
+            exp_annotations:
+              summary: "mirror-2 in tank is far slower than its sibling vdevs"
+              description: "mirror-2 has a p99 I/O latency of 496ms, more than five times the median of the other vdevs in tank, sustained for 30 minutes. ZFS stripes across top-level vdevs, so the slowest one sets the pool's effective latency. Pool health and SMART can both be perfectly clean while this is true, which is exactly how it went unnoticed, and a clean SMART report is not a reason to close this. Compare members with `zpool iostat -l -v tank 10 2` on the NAS, and the per-leaf zfs_vdev_disk_wait_write_seconds_bucket series to see whether one disk or both are affected. Prefer the share of operations past a fixed boundary over the p99 itself when judging how bad it is, because the exporter downsamples ZFS's 37 latency buckets to 11 and histogram_quantile interpolates inside the wide ones: `sum(rate(zfs_vdev_disk_wait_write_seconds_bucket{pool=\"tank\", le=\"0.1\"}[1h])) by (vdev) / sum(rate(zfs_vdev_disk_wait_write_seconds_count{pool=\"tank\"}[1h])) by (vdev)`. If both members of one mirror are slow while their siblings are not, check the drive lot and firmware before the media: tank's mirror-2 is the only pair of Inland IB24AJ drives on VE1R9004 and runs 20x its siblings with spotless SMART."
