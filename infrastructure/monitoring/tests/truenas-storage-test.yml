@@ -1003,3 +1003,162 @@ tests:
             exp_annotations:
               summary: "mirror-2 in tank is far slower than its sibling vdevs"
               description: "mirror-2 has a p99 I/O latency of 496ms, more than five times the median of the other vdevs in tank, sustained for 30 minutes. ZFS stripes across top-level vdevs, so the slowest one sets the pool's effective latency. Pool health and SMART can both be perfectly clean while this is true, which is exactly how it went unnoticed, and a clean SMART report is not a reason to close this. Compare members with `zpool iostat -l -v tank 10 2` on the NAS, and the per-leaf zfs_vdev_disk_wait_write_seconds_bucket series to see whether one disk or both are affected. Prefer the share of operations past a fixed boundary over the p99 itself when judging how bad it is, because the exporter downsamples ZFS's 37 latency buckets to 11 and histogram_quantile interpolates inside the wide ones: `sum(rate(zfs_vdev_disk_wait_write_seconds_bucket{pool=\"tank\", le=\"0.1\"}[1h])) by (vdev) / sum(rate(zfs_vdev_disk_wait_write_seconds_count{pool=\"tank\"}[1h])) by (vdev)`. If both members of one mirror are slow while their siblings are not, check the drive lot and firmware before the media: tank's mirror-2 is the only pair of Inland IB24AJ drives on VE1R9004 and runs 20x its siblings with spotless SMART."
+
+  - interval: 1m
+    name: a busy pool does not count as mirror-2 recovering, which is the flap
+    # The 2026-11-10 noise. mirror-2 was 32x its siblings for 92.8 percent of
+    # a week and still produced 62 separate firing episodes, because the alert
+    # compares against the pool's own median and that median moves. Every few
+    # minutes the whole pool got busy, the median rose past mirror-2 / 5, the
+    # alert resolved, and 30 minutes later it fired again. 130 Discord cards
+    # for one unchanged pair of drives.
+    #
+    # mirror-2 here is never faster than 0.1s, the whole week in one shape. Its
+    # three siblings are fast until minute 120, spike for 30 minutes, and
+    # recover. The spike is unambiguous rather than the marginal crossing the
+    # real pool produces, because a marginal fixture would be asserting the
+    # arithmetic of histogram_quantile's interpolation instead of the thing
+    # under test, which is whether a busy baseline is allowed to clear the
+    # alert. Nothing about mirror-2 changes at any point in this fixture.
+    input_series:
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.0001"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.0005"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.001"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.005"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.01"}'
+        values: '0+3000x119 360000+0x29 363000+3000x120'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.05"}'
+        values: '0+3000x119 360000+0x29 363000+3000x120'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.1"}'
+        values: '0+3000x119 360000+0x29 363000+3000x120'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="0.5"}'
+        values: '0+3000x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="1"}'
+        values: '0+3000x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="5"}'
+        values: '0+3000x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-0", le="+Inf"}'
+        values: '0+3000x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.0001"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.0005"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.001"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.005"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.01"}'
+        values: '0+3000x119 360000+0x29 363000+3000x120'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.05"}'
+        values: '0+3000x119 360000+0x29 363000+3000x120'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.1"}'
+        values: '0+3000x119 360000+0x29 363000+3000x120'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="0.5"}'
+        values: '0+3000x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="1"}'
+        values: '0+3000x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="5"}'
+        values: '0+3000x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-1", le="+Inf"}'
+        values: '0+3000x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.0001"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.0005"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.001"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.005"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.01"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.05"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.1"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="0.5"}'
+        values: '0+3000x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="1"}'
+        values: '0+3000x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="5"}'
+        values: '0+3000x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-2", le="+Inf"}'
+        values: '0+3000x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.0001"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.0005"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.001"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.005"}'
+        values: '0+0x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.01"}'
+        values: '0+3000x119 360000+0x29 363000+3000x120'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.05"}'
+        values: '0+3000x119 360000+0x29 363000+3000x120'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.1"}'
+        values: '0+3000x119 360000+0x29 363000+3000x120'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="0.5"}'
+        values: '0+3000x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="1"}'
+        values: '0+3000x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="5"}'
+        values: '0+3000x270'
+      - series: 'zfs_vdev_total_wait_write_seconds_bucket{job="vm-node-exporter", instance="truenas", pool="tank", vdev="mirror-3", le="+Inf"}'
+        values: '0+3000x270'
+    alert_rule_test:
+      # Firing on the real condition before anything else happens.
+      - eval_time: 60m
+        alertname: ZfsVdevLatencyOutlier
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              pool: tank
+              vdev: mirror-2
+            exp_annotations:
+              summary: "mirror-2 in tank is far slower than its sibling vdevs"
+              description: "mirror-2 has a p99 I/O latency of 496ms, more than five times the median of the other vdevs in tank, sustained for 30 minutes. ZFS stripes across top-level vdevs, so the slowest one sets the pool's effective latency. Pool health and SMART can both be perfectly clean while this is true, which is exactly how it went unnoticed, and a clean SMART report is not a reason to close this. Compare members with `zpool iostat -l -v tank 10 2` on the NAS, and the per-leaf zfs_vdev_disk_wait_write_seconds_bucket series to see whether one disk or both are affected. Prefer the share of operations past a fixed boundary over the p99 itself when judging how bad it is, because the exporter downsamples ZFS's 37 latency buckets to 11 and histogram_quantile interpolates inside the wide ones: `sum(rate(zfs_vdev_disk_wait_write_seconds_bucket{pool=\"tank\", le=\"0.1\"}[1h])) by (vdev) / sum(rate(zfs_vdev_disk_wait_write_seconds_count{pool=\"tank\"}[1h])) by (vdev)`. If both members of one mirror are slow while their siblings are not, check the drive lot and firmware before the media: tank's mirror-2 is the only pair of Inland IB24AJ drives on VE1R9004 and runs 20x its siblings with spotless SMART."
+      # Ten minutes into the busy window. The comparison now fails, and before
+      # keep_firing_for this resolved here and sent a `resolved` card.
+      - eval_time: 130m
+        alertname: ZfsVdevLatencyOutlier
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              pool: tank
+              vdev: mirror-2
+            exp_annotations:
+              summary: "mirror-2 in tank is far slower than its sibling vdevs"
+              description: "mirror-2 has a p99 I/O latency of 496ms, more than five times the median of the other vdevs in tank, sustained for 30 minutes. ZFS stripes across top-level vdevs, so the slowest one sets the pool's effective latency. Pool health and SMART can both be perfectly clean while this is true, which is exactly how it went unnoticed, and a clean SMART report is not a reason to close this. Compare members with `zpool iostat -l -v tank 10 2` on the NAS, and the per-leaf zfs_vdev_disk_wait_write_seconds_bucket series to see whether one disk or both are affected. Prefer the share of operations past a fixed boundary over the p99 itself when judging how bad it is, because the exporter downsamples ZFS's 37 latency buckets to 11 and histogram_quantile interpolates inside the wide ones: `sum(rate(zfs_vdev_disk_wait_write_seconds_bucket{pool=\"tank\", le=\"0.1\"}[1h])) by (vdev) / sum(rate(zfs_vdev_disk_wait_write_seconds_count{pool=\"tank\"}[1h])) by (vdev)`. If both members of one mirror are slow while their siblings are not, check the drive lot and firmware before the media: tank's mirror-2 is the only pair of Inland IB24AJ drives on VE1R9004 and runs 20x its siblings with spotless SMART."
+      # Still inside the hour. mirror-2 has not changed, so neither has this.
+      - eval_time: 175m
+        alertname: ZfsVdevLatencyOutlier
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              pool: tank
+              vdev: mirror-2
+            exp_annotations:
+              summary: "mirror-2 in tank is far slower than its sibling vdevs"
+              description: "mirror-2 has a p99 I/O latency of 496ms, more than five times the median of the other vdevs in tank, sustained for 30 minutes. ZFS stripes across top-level vdevs, so the slowest one sets the pool's effective latency. Pool health and SMART can both be perfectly clean while this is true, which is exactly how it went unnoticed, and a clean SMART report is not a reason to close this. Compare members with `zpool iostat -l -v tank 10 2` on the NAS, and the per-leaf zfs_vdev_disk_wait_write_seconds_bucket series to see whether one disk or both are affected. Prefer the share of operations past a fixed boundary over the p99 itself when judging how bad it is, because the exporter downsamples ZFS's 37 latency buckets to 11 and histogram_quantile interpolates inside the wide ones: `sum(rate(zfs_vdev_disk_wait_write_seconds_bucket{pool=\"tank\", le=\"0.1\"}[1h])) by (vdev) / sum(rate(zfs_vdev_disk_wait_write_seconds_count{pool=\"tank\"}[1h])) by (vdev)`. If both members of one mirror are slow while their siblings are not, check the drive lot and firmware before the media: tank's mirror-2 is the only pair of Inland IB24AJ drives on VE1R9004 and runs 20x its siblings with spotless SMART."
+      # Past the hour with the comparison still failing, so it does resolve.
+      # keep_firing_for must not be able to pin an alert on permanently.
+      - eval_time: 195m
+        alertname: ZfsVdevLatencyOutlier
+        exp_alerts: []
+
+      # The siblings' spike has aged out of the [1h] rate window, so mirror-2
+      # is an outlier again and the rule serves `for` from scratch.
+      - eval_time: 250m
+        alertname: ZfsVdevLatencyOutlier
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              pool: tank
+              vdev: mirror-2
+            exp_annotations:
+              summary: "mirror-2 in tank is far slower than its sibling vdevs"
+              description: "mirror-2 has a p99 I/O latency of 496ms, more than five times the median of the other vdevs in tank, sustained for 30 minutes. ZFS stripes across top-level vdevs, so the slowest one sets the pool's effective latency. Pool health and SMART can both be perfectly clean while this is true, which is exactly how it went unnoticed, and a clean SMART report is not a reason to close this. Compare members with `zpool iostat -l -v tank 10 2` on the NAS, and the per-leaf zfs_vdev_disk_wait_write_seconds_bucket series to see whether one disk or both are affected. Prefer the share of operations past a fixed boundary over the p99 itself when judging how bad it is, because the exporter downsamples ZFS's 37 latency buckets to 11 and histogram_quantile interpolates inside the wide ones: `sum(rate(zfs_vdev_disk_wait_write_seconds_bucket{pool=\"tank\", le=\"0.1\"}[1h])) by (vdev) / sum(rate(zfs_vdev_disk_wait_write_seconds_count{pool=\"tank\"}[1h])) by (vdev)`. If both members of one mirror are slow while their siblings are not, check the drive lot and firmware before the media: tank's mirror-2 is the only pair of Inland IB24AJ drives on VE1R9004 and runs 20x its siblings with spotless SMART."
