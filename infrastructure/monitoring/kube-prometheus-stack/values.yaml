@@ -1575,6 +1575,39 @@ kube-prometheus-stack:
                 > on (pool) group_left()
                 (5 * quantile by (pool) (0.5, zfs:vdev_total_wait_p99_seconds))
               for: 30m
+              # Measured 2026-11-10 over the preceding 7 days: this rule
+              # produced 62 firing episodes and 130 Discord messages, 5x the
+              # next noisiest alert in the lab, while the condition it tests
+              # was continuously true for 92.8% of that week. mirror-2 sat at
+              # a 308ms median p99 against 9.5ms for each of its three
+              # siblings and was above the 0.05 floor in 1977 of 2017 samples.
+              # So the flapping was never the drives recovering. It is the
+              # baseline moving: `5 * median of the other vdevs` ranged from
+              # 39ms to 3226ms over the same week, so a few busy minutes
+              # anywhere in the pool lift the median until mirror-2 no longer
+              # looks like an outlier. Across the 110 windows where that
+              # happened the median was 4 minutes long and the 90th percentile
+              # 11 minutes, and each one cost a `resolved` card plus a fresh
+              # `firing` card 30 minutes later once `for` had been served
+              # again.
+              #
+              # keep_firing_for says a gap shorter than the window the
+              # measurement is taken over is not a recovery. The p99 above is
+              # a rate over [1h], so an hour is the shortest interval in which
+              # this metric can show real improvement at all, which makes 1h
+              # the principled value rather than a tuned one. Replayed against
+              # that week at 1-minute resolution it takes 130 messages to 5,
+              # and the only two resolves left are the two occasions the
+              # condition really was false for more than an hour (the longest
+              # was 68 minutes). The sweep, for the record: 5m -> 53 messages,
+              # 15m -> 9, 1h -> 5, 2h -> 1.
+              #
+              # The cost is that a genuine fix clears this up to an hour late,
+              # on top of the hour the rate window already takes, and that a
+              # scrape outage on the NAS holds the alert for an hour rather
+              # than resolving it. NodeDown covers the second case, and
+              # neither is worth 18 messages a day.
+              keep_firing_for: 1h
               labels:
                 severity: warning
               annotations:
