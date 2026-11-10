@@ -83,6 +83,28 @@ stringData:
           group_by: [alertname]
           group_wait: 1m
           repeat_interval: 1h
+        # A chronic hardware condition, not an event. tank/mirror-2 has been
+        # an outlier since 2026-11-02 and will be until the Inland IB24AJ pair
+        # is dealt with (mithr4ndir/ansible-quasarlab#248). On the parent
+        # route's 4h repeat that is six identical cards a day for a fact that
+        # does not change. Measured on 2026-11-10, this one alert was 35% of
+        # all Discord traffic in the lab.
+        #
+        # repeat_interval only governs RE-notification, so this costs nothing
+        # in time to notice: a new vdev going bad still pages on the first
+        # evaluation after `for: 30m`, exactly as before. What it buys is that
+        # a condition already filed as an issue reminds once a day instead of
+        # six times.
+        #
+        # Ordering matters: routes are first match, and this sits above the
+        # `severity = critical` sibling. If this alert is ever promoted to
+        # critical it keeps the 24h repeat rather than picking up the 1h one,
+        # so move it below that sibling if you change its severity.
+        - matchers:
+            - alertname = "ZfsVdevLatencyOutlier"
+          receiver: discord
+          group_by: [alertname, pool, vdev]
+          repeat_interval: 24h
         - matchers:
             - severity = critical
           receiver: discord
