@@ -1,0 +1,98 @@
+# hobby-bot: Discord slash commands that hand out SF and Bay Area social hobby
+# picks, three at a time, on demand or on a weekly toggle.
+# Source: https://github.com/mithr4ndir/hobby-bot
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hobby-bot
+  namespace: automation
+  labels:
+    app.kubernetes.io/name: hobby-bot
+    app.kubernetes.io/component: bot
+spec:
+  # Exactly one: a second gateway session on the same token would answer every
+  # command twice, and the state files on the PVC must have a single writer.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hobby-bot
+      app.kubernetes.io/component: bot
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hobby-bot
+        app.kubernetes.io/component: bot
+      annotations:
+        # Restart when hobby-bot-secrets changes, so a new token logs in
+        # without waiting for the mounted file to refresh.
+        reloader.stakater.com/auto: "true"
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: hobby-bot
+        image: ghcr.io/mithr4ndir/hobby-bot:0.1.0@sha256:a6c7a13e23a3d696d7c5843d420ba509cbcdf33f2f34456359e0957afc17f5a7
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: HOBBY_BOT_DATA_DIR
+          value: /data
+        - name: HOBBY_BOT_HEARTBEAT
+          value: /tmp/heartbeat
+        - name: DISCORD_TOKEN_FILE
+          value: /secrets/discord/token
+        # The weekly feed hour is interpreted in this zone.
+        - name: TZ
+          value: America/Los_Angeles
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 50m
+            memory: 96Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        # The bot touches /tmp/heartbeat once a minute while the gateway
+        # session is healthy (and while idling on a placeholder token).
+        # Five minutes without a touch means a wedged websocket: restart.
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - /app/healthcheck.py
+          initialDelaySeconds: 90
+          periodSeconds: 60
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: data
+          mountPath: /data
+        - name: discord
+          mountPath: /secrets/discord
+          readOnly: true
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 64Mi
+      - name: data
+        persistentVolumeClaim:
+          claimName: hobby-bot-data
+      - name: discord
+        secret:
+          secretName: hobby-bot-secrets
+          defaultMode: 0400

@@ -1,0 +1,17 @@
+# activities.json (the catalog, edited through /activity) and feed_state.json
+# (schedule plus the last nine picks, so batches never repeat). Both are JSON
+# written with rename, not SQLite, so NFS is fine here.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hobby-bot-data
+  namespace: automation
+  labels:
+    app.kubernetes.io/name: hobby-bot
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: k8s-nfs
+  resources:
+    requests:
+      storage: 64Mi
