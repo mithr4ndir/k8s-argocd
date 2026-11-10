@@ -40,7 +40,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: hobby-bot
-        image: ghcr.io/mithr4ndir/hobby-bot:0.1.0@sha256:a6c7a13e23a3d696d7c5843d420ba509cbcdf33f2f34456359e0957afc17f5a7
+        image: ghcr.io/mithr4ndir/hobby-bot:0.2.0@sha256:55ce58254868e364f236c7357aed6221861b2afaa90abe30d6f2c4b23d0d3be6
         imagePullPolicy: IfNotPresent
         env:
         - name: HOBBY_BOT_DATA_DIR
@@ -49,6 +49,10 @@ spec:
           value: /tmp/heartbeat
         - name: DISCORD_TOKEN_FILE
           value: /secrets/discord/token
+        # Weekly feed destination until /feed on picks a channel, and the only
+        # destination while the token is still the placeholder.
+        - name: HOBBY_BOT_WEBHOOK_FILE
+          value: /secrets/discord/webhook_url
         # The weekly feed hour is interpreted in this zone.
         - name: TZ
           value: America/Los_Angeles
