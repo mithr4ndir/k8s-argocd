@@ -40,7 +40,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: hobby-bot
-        image: ghcr.io/mithr4ndir/hobby-bot:0.2.0@sha256:55ce58254868e364f236c7357aed6221861b2afaa90abe30d6f2c4b23d0d3be6
+        image: ghcr.io/mithr4ndir/hobby-bot:0.2.1@sha256:38b7251d32224285a79c92eae19c7030c7624a2a93c8ad692e71a9c1be62941e
         imagePullPolicy: IfNotPresent
         env:
         - name: HOBBY_BOT_DATA_DIR
